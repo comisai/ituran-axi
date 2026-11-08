@@ -46,6 +46,13 @@ function addressOf(end: Row): string | null {
   return str(address.location) ?? null;
 }
 
+/** A trip end's coordinate; (0,0) is Ituran's "no fix", so it is no coordinate. */
+function coordinate(end: Row, key: 'lat' | 'lon'): number | null {
+  const point = obj(obj(end.location).point);
+  if (point.lat === 0 && point.lon === 0) return null;
+  return typeof point[key] === 'number' ? (point[key] as number) : null;
+}
+
 function driverOf(t: Row): string | null {
   const name = str(t.driver_name);
   if (name?.trim()) return name;
@@ -77,6 +84,10 @@ export function tripRow(t: Row): Row {
         : null,
     from: addressOf(start),
     to: addressOf(end),
+    start_lat: coordinate(start, 'lat'),
+    start_lon: coordinate(start, 'lon'),
+    end_lat: coordinate(end, 'lat'),
+    end_lon: coordinate(end, 'lon'),
     status: str(t.trip_status) ?? null,
   };
 }
@@ -96,6 +107,10 @@ const KNOWN = [
   'from',
   'to',
   'status',
+  'start_lat',
+  'start_lon',
+  'end_lat',
+  'end_lon',
 ];
 
 export async function trips(input: CommandInput): Promise<string> {

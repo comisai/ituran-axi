@@ -17,7 +17,9 @@ zone.
 Find a vehicle with `ituran-axi vehicles <text>` (plate digits, name, make or
 model), then `ituran-axi vehicle <plate>` for its position, driver and saved
 places. `ituran-axi where --all` lists every vehicle's last position with its
-age: a position hours old is where the vehicle was, not where it is.
+age: a position hours old is where the vehicle was, not where it is. `where
+--near <lat,lon> --within <km>` and `centers --near <plate>` measure distances
+here, without any map service.
 `ituran-axi trips <plate> --since 24h` lists trips; Ituran matches trips by
 their end time and lists one only hours after it ends, so say so when a recent
 window is empty. `ituran-axi totals` sums a window. "N of TOTAL" means the

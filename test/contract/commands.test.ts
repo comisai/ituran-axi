@@ -287,6 +287,101 @@ describe('ituran-axi against the fake', () => {
     );
   });
 
+  it('answers "near a point" and "nearest" questions locally', async () => {
+    // Vehicle i stands at 32.08 + i/100, 34.78; this point is vehicle 2's.
+    const near = await ok('where', '--near', '32.10,34.78', '--within', '1.2');
+    const rows = doc(near).vehicles as Record<string, unknown>[];
+    assert.deepEqual(
+      rows.map((r) => r.plate),
+      ['34567890', '23456789', '45678901'],
+    );
+    assert.equal(rows[0]?.km, 0);
+    assert.match(
+      String(doc(near).listed),
+      /^3 within 1\.2 km of 32\.1,34\.78$/,
+    );
+    await fails(2, 'usage', 'where', '--within', '5');
+    await fails(2, 'usage', 'where', '--near', 'north');
+    const centers = await ok('centers', '--near', '12345678');
+    const list = doc(centers).centers as Record<string, unknown>[];
+    assert.equal(list[0]?.name, 'Tel Aviv Center');
+    assert.match(
+      String(doc(centers).from),
+      /^12345678, last seen \d+[mhd] ago$/,
+    );
+    assert.match(summary(await ok('centers')), /^3 Ituran service centers$/);
+  });
+
+  it("reads every vehicle's diagnostics, and new columns", async () => {
+    const all = await ok('diagnostics', '--all', '--limit', '50');
+    assert.match(summary(all), /^9 latest readings from 9 of 13 vehicles/);
+    await fails(2, 'usage', 'diagnostics');
+    await fails(2, 'usage', 'diagnostics', '12345678', '--all');
+    const years = await ok(
+      'vehicles',
+      '--fields',
+      'plate,make,year',
+      '--limit',
+      '4',
+    );
+    const rows = doc(years).vehicles as Record<string, unknown>[];
+    assert.deepEqual(rows[3], { plate: '45678901', make: 'Ford', year: null });
+    assert.equal(rows[0]?.year, 2022);
+    const trip = await ok(
+      'trips',
+      '12345678',
+      '--date',
+      '2026-11-07',
+      '--fields',
+      'id,start_lat,end_lon',
+      '--limit',
+      '1',
+    );
+    assert.deepEqual((doc(trip).trips as unknown[])[0], {
+      id: 5000,
+      start_lat: 32,
+      end_lon: 34.9,
+    });
+  });
+
+  it('reads safety by group and by month', async () => {
+    const groups = await ok('safety', 'groups', '--date', '2026-11-07');
+    assert.match(
+      summary(groups),
+      /^2 of 3 groups have safety data; 1 have none/,
+    );
+    // Ituran counts any time today as the future here, so windows end yesterday.
+    const groupsWeek = await ok('safety', 'groups');
+    assert.match(summary(groupsWeek), /^2 of 3 groups have safety data/);
+    assert.match(String(doc(groupsWeek).window), /up to yesterday/);
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jerusalem',
+    }).format(new Date());
+    await fails(2, 'usage', 'safety', 'groups', '--date', today);
+    const monthly = await ok(
+      'safety',
+      'periodic',
+      '--by',
+      'month',
+      '--from',
+      '2026-09-01',
+      '--to',
+      '2026-10-31',
+    );
+    assert.match(monthly, /2026-09/);
+    await fails(2, 'usage', 'safety', 'totals', '--by', 'month');
+    await fails(2, 'usage', 'safety', 'periodic', '--by', 'week');
+  });
+
+  it('pages drivers at most 1,000 at a time', async () => {
+    assert.match(
+      summary(await ok('drivers', '--limit', '1000')),
+      /^25 drivers$/,
+    );
+    await fails(2, 'usage', 'drivers', '--limit', '1001');
+    assert.match(summary(await ok('drivers', 'דנה')), /driver/);
+  });
+
   it('names a service the account lacks, and the home view remembers it', async () => {
     await fails(1, 'not_entitled', 'temps');
     assert.equal(
@@ -364,5 +459,27 @@ describe('ituran-axi in other conditions', () => {
     assert.match(r.stdout, /^code: unreachable$/m);
     assert.equal(f.state.requests.length, 0);
     await f.close();
+  });
+});
+
+describe('ituran-axi with temperature sensors', () => {
+  let temps: Awaited<ReturnType<typeof startFake>>;
+  let tempsEnv: Record<string, string>;
+  before(async () => {
+    temps = await startFake({ temps: true });
+    tempsEnv = fakeEnv(temps.url);
+  });
+  after(() => temps.close());
+
+  it('reads current sensors and a sampled history', async () => {
+    const current = await runBinary(['temps'], tempsEnv);
+    assert.equal(current.code, 0, current.stdout);
+    assert.match(summary(current.stdout), /^1 sensor readings/);
+    const history = await runBinary(
+      ['temps', 'history', '12345678', '--date', '2026-11-07'],
+      tempsEnv,
+    );
+    assert.equal(history.code, 0, history.stdout);
+    assert.match(summary(history.stdout), /^2 readings from 2026-11-07/);
   });
 });

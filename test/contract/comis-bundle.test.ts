@@ -132,6 +132,20 @@ describe('Comis bundle', () => {
       ['maintenance', '12345678'],
       ['maintenance', '--types'],
       ['temps'],
+      ['centers', '--near', '12345678'],
+      ['where', '--near', '32.10,34.78', '--within', '5'],
+      ['diagnostics', '--all'],
+      ['safety', 'groups', '--date', '2026-11-07'],
+      [
+        'safety',
+        'periodic',
+        '--by',
+        'month',
+        '--from',
+        '2026-09-01',
+        '--to',
+        '2026-10-31',
+      ],
     ];
     const before = fake.state.requests.length;
     for (const args of commands) await runBinary(args, env);

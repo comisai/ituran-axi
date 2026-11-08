@@ -11,7 +11,6 @@ import {
   type FetchPage,
   intFlag,
   listOutput,
-  MAX_PAGE,
   open,
   type Row,
   recordOutput,
@@ -22,6 +21,9 @@ import {
   walkAll,
   windowRows,
 } from './common.ts';
+
+/** The driver list takes pages of at most 1,000 rows. */
+const DRIVER_PAGE = 1000;
 
 function driverRow(d: Row): Row {
   const name = [str(d.first_name), str(d.last_name)]
@@ -51,7 +53,7 @@ const KNOWN = [
 export async function drivers(input: CommandInput): Promise<string> {
   const ctx = open(input);
   const { values } = input;
-  const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
+  const limit = intFlag(values.limit, 'limit', 20, 1, DRIVER_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
   const columns = columnsFlag(
     values.fields,
@@ -76,7 +78,7 @@ export async function drivers(input: CommandInput): Promise<string> {
   let total: number | null;
   let partial: string | undefined;
   if (text) {
-    const all = await walkAll(fetchPage, MAX_PAGE);
+    const all = await walkAll(fetchPage, DRIVER_PAGE);
     const needle = text.toLowerCase();
     const hits = all.rows
       .map(driverRow)

@@ -16,7 +16,7 @@
 
 **How it fits Comis.** The AXI never holds a real secret. It sends `Authorization: Bearer $ITURAN_TOKEN`, where the token is the Gate's stable placeholder. The Gate holds the username and password, signs in with the password grant, refreshes the token, and swaps in the real one. That needs one Gate change, a password-grant connection (C1), because today the Gate signs in only to Google, Microsoft and Slack. Every request the AXI makes is a read. Writes, live device commands and the identity routes are refused.
 
-**What the first release does.** Reads only, with 23 commands, counting the home view, `help` and `logout`, in place of 152 tools. Writes to places, alerts and vehicle groups come later, behind the owner's approval. Commands to a vehicle's device (immobilize, start tracking, keypad) are never offered.
+**What the first release does.** Reads only, with 24 commands, counting the home view, `help` and `logout`, in place of 152 tools. All 126 questions of `ituran-mcp`'s `docs/USER-PROMPTS.md` are answered from these commands on the live account (§13). Writes to places, alerts and vehicle groups come later, behind the owner's approval. Commands to a vehicle's device (immobilize, start tracking, keypad) are never offered.
 
 **What was removed.** Every one of the 152 tools is merged into these commands or dropped (§5). That covers the 24 write tools, the contact and drive-permission families, the in-memory planner, and about 45 composite reports whose work an agent now does with the AXI's rows and the shell. The runtime keeps one dependency instead of two, and about 3,000 lines of code instead of about 40,000.
 
@@ -184,7 +184,7 @@ Sources: axi.md, read 2026-11-08, and the stricter Comis reading in spec §5.4 (
 
 The conversion is a reduction. An MCP server has to put every capability into its schema because the model cannot compose tools cheaply. An AXI gives the agent compact rows, and the agent composes them with `grep`, `awk`, `sort` and files. So `ituran-axi` keeps the **primitives**, plus the few behaviors that only the tool can do correctly: paced walks, cursor rules, large integers, plate and time normalization, and Ituran's quirks. It drops the rest.
 
-### 5.1 Tools (152 to 23 commands)
+### 5.1 Tools (152 to 24 commands)
 
 | `ituran-mcp` family | Tools | `ituran-axi` | Why |
 | --- | ---: | --- | --- |
@@ -204,9 +204,9 @@ The conversion is a reduction. An MCP server has to put every capability into it
 | diagnostics | 6 | `diagnostics <plate>... [--history]` | The EV, battery, wear and fuel boards become recipes. |
 | BI reports and composites | 17 | `report daily\|periodic\|idle` | 6 endpoint tools become one command with a report name and `--drivers`. 11 composites become recipes. |
 | operational reports and composites | 19 | `report speed\|events\|engine\|full\|diagnostics\|heat-map` | One command walks the cursor, removes repeated rows, and splits plates by 5 and windows by under 3 days. 13 composites become recipes. |
-| safety | 13 | `safety [vehicles\|drivers\|totals\|periodic\|groups\|ubi]` | The 5 rankings and the coaching brief become `sort` and `awk` over these rows. |
+| safety | 13 | `safety [vehicles\|drivers\|totals\|periodic\|groups\|ubi]` | The 5 rankings and the coaching brief become `sort` and `awk` over these rows. `safety groups` reads one group per call, and its window ends yesterday: Ituran counts any time today as the future there. |
 | exports | 2 | **dropped** | Status of scheduled e-mail exports. None on this account. |
-| info | 3 | **dropped** | A static directory of service centers. BI groups feed `safety groups` internally. |
+| info | 3 | `centers [--near <plate\|lat,lon>]` | Ituran's service centers, nearest first from a vehicle's last position, computed locally (use cases 18 and 60). Distributor centers are dropped. BI groups feed `safety groups` internally. |
 | maintenance | 7 | `maintenance [<plate>] [--types]` | `ituran-mcp` hides this family by default because accounts that keep no schedules read as "overdue". The AXI shows it with an honest empty state instead. The composites become recipes. |
 | advanced | 2 | **dropped** | Not entitled on this account. The AXI resolves labels from definitions it already reads. |
 | ITC temperatures | 5 | `temps [current\|history\|breaches]` | Kept, but **unqualified** until an entitled account is available. This account answers `1006`, which `temps` reports as `not_entitled`, and the home view then lists the service as unavailable. |
@@ -275,11 +275,12 @@ The workbench never sees the username, password, access token or refresh token. 
 ituran-axi                                     home: account, zone, vehicles, services met as unavailable, next steps
 ituran-axi vehicles [<text>] [--fields a,b] [--limit N] [--page N]
 ituran-axi vehicle <plate> [--full]            last position with address, current driver, saved places
-ituran-axi where [<plate>...] [--all] [--stale <span>] [--fields a,b] [--limit N] [--page N]
+ituran-axi where [<plate>...] [--all] [--stale <span>] [--near <lat,lon> [--within <km>]] [--fields a,b] [--limit N] [--page N]
 ituran-axi trips [<plate>...] [--since <span> | --from <t> [--to <t>] | --date <d>] [--fields a,b] [--limit N] [--page N]
 ituran-axi trip <id> [--points] [--safety] [--speeding]
 ituran-axi totals [<plate>] [window]
 ituran-axi odometer <plate>... | --all
+ituran-axi centers [--near <plate|lat,lon>]    Ituran service centers, nearest first
 ituran-axi drivers [<text>] [--fields a,b] [--limit N] [--page N]
 ituran-axi driver <id> [--full]
 ituran-axi places [<text>] [--refresh] [--limit N] [--page N]
@@ -288,10 +289,10 @@ ituran-axi groups [<id>]
 ituran-axi events [--all]                      event states with the vehicles in each now
 ituran-axi event <id>                          the vehicles in that state
 ituran-axi alerts [--plate <plate>]
-ituran-axi diagnostics <plate>... [--names a,b] [--history --date <d>]
+ituran-axi diagnostics <plate>... | --all [--names a,b] [--history --date <d>]
 ituran-axi report daily|periodic|idle [<plate>...] [--drivers] [window] [--limit N] [--page N]
 ituran-axi report speed|events|engine|full|diagnostics|heat-map <plate>... [window] [--over <km/h>] [--limit N]
-ituran-axi safety [totals|vehicles|drivers|periodic|ubi-vehicles|ubi-drivers] [window]
+ituran-axi safety [totals|vehicles|drivers|groups|periodic [--by day|month]|ubi-vehicles|ubi-drivers] [window]
 ituran-axi maintenance [<plate>] [--types]
 ituran-axi temps [current|history <plate>|breaches] [window]
 ituran-axi logout                              delete the cached token; nothing is sent
@@ -572,6 +573,7 @@ Nothing touches the Hub. The chief of staff's prompt is unchanged.
 | AXI principles | The ten principles against the built binary, following the Comis fixture | `test/axi` |
 | **Live** | Production, or QA, behaves as the fake assumes, and the AXI works on it end to end (S1 to S13) | `test/live/ituran-live.mjs` |
 | Parity | `ituran-mcp` 4.2.0 and `ituran-axi` agree on the same reads | live S12 |
+| **Use cases** | Each of the 126 questions in `ituran-mcp`'s `docs/USER-PROMPTS.md` has commands that answer it on the live account, or name the service the account lacks | live S14 (`--use-cases`), `test/live/use-cases.mjs` |
 | Comis proofs | `ituran-reads`, `ituran-token-custody` (the password grant stays in the Gate; the workbench never sees a token; the token route is refused from the workbench), `ituran-reconnect-needed` (401 becomes 502; 403 entitlement answers pass), `ituran-placeholder-host`, `ituran-refusals` (writes, device commands, identity routes), `ituran-record-source-binding` | Comis `tests/integration/connectors` |
 
 **Live checks** are maintainer runs with the owner's authorization, read-only by construction, and never in public CI.

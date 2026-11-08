@@ -54,6 +54,11 @@ export async function diagnostics(input: CommandInput): Promise<string> {
   const ctx = open(input);
   const { values } = input;
   const plates = [...new Set(input.positionals.map(normalizePlate))];
+  const every = values.all === true;
+  if (every === plates.length > 0)
+    throw usage('Give plates, or --all for every vehicle, not both.');
+  if (every && values.history === true)
+    throw usage('--history reads one vehicle: give one plate.');
   const acc = await account(ctx);
   const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
   const names =
@@ -101,27 +106,46 @@ export async function diagnostics(input: CommandInput): Promise<string> {
       rows = rows.filter((r) => names.includes(String(r.channel)));
     summary = `${rows.length} readings for ${plates[0]} from ${w.from} to ${w.to}${all.partial ? ` (partial: ${all.partial})` : ''}`;
   } else {
-    const json = await ctx.client.read({
-      method: 'POST',
-      path: api(ctx, '/diagnostics'),
-      body: {
-        filter: {
-          license_plates: plates,
-          ...(names.length ? { diagnostic_names: names } : {}),
-        },
+    // "*" asks for every vehicle the account sees; pages go by vehicle.
+    const all = await walkAll(
+      async (page_number, page_size) => {
+        const json = await ctx.client.read({
+          method: 'POST',
+          path: api(ctx, '/diagnostics'),
+          body: {
+            filter: {
+              license_plates: every ? ['*'] : plates,
+              ...(names.length ? { diagnostic_names: names } : {}),
+            },
+          },
+          query: { page_number, page_size },
+          ctx: {
+            what: 'diagnostics',
+            ...(plates.length === 1 ? { plate: plates[0] as string } : {}),
+          },
+          emptyOn404: true,
+        });
+        return {
+          rows: rowsOf(json, 'vehicles'),
+          total: json === null ? 0 : totalOf(json),
+        };
       },
-      query: { page_number: 1, page_size: Math.max(10, plates.length) },
-      ctx: {
-        what: 'diagnostics',
-        ...(plates.length === 1 ? { plate: plates[0] as string } : {}),
-      },
-      emptyOn404: true,
-    });
-    for (const v of rowsOf(json, 'vehicles'))
-      rows.push(
-        ...readingRows(v.license_plate, v.diagnostics, ctx.now, acc.zone),
+      every ? 500 : Math.max(10, plates.length),
+    );
+    let reporting = 0;
+    for (const v of all.rows) {
+      const found = readingRows(
+        v.license_plate,
+        v.diagnostics,
+        ctx.now,
+        acc.zone,
       );
-    summary = `${rows.length} latest readings for ${plates.join(' ')}; each has its own time, and many are old`;
+      if (found.length) reporting++;
+      rows.push(...found);
+    }
+    summary = every
+      ? `${rows.length} latest readings from ${reporting} of ${all.rows.length} vehicles; each has its own time, and many are old${all.partial ? ` (partial: ${all.partial})` : ''}`
+      : `${rows.length} latest readings for ${plates.join(' ')}; each has its own time, and many are old`;
   }
   return listOutput({
     key: 'readings',
@@ -269,7 +293,8 @@ export async function temps(input: CommandInput): Promise<string> {
     query: {
       ...(plate ? { license_plate: plate } : {}),
       from_date: w.from,
-      ...(view === 'history' ? { to_date: w.to } : {}),
+      // The report samples every this many minutes; Ituran requires it.
+      ...(view === 'history' ? { to_date: w.to, data_frequency: 60 } : {}),
     },
     ctx: { what, ...(plate ? { plate } : {}) },
     emptyOn404: true,

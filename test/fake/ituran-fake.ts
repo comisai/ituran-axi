@@ -24,6 +24,8 @@ export interface FakeOptions {
   pressureOnce?: boolean;
   /** Act as the Comis Gate whose stored sign-in Ituran refused. */
   reconnect?: boolean;
+  /** Include the temperature sensors (ITC) service. */
+  temps?: boolean;
   /** A bearer token accepted without a grant, as the Gate's placeholder is. */
   token?: string;
   port?: number;
@@ -36,6 +38,21 @@ export interface FakeState {
 
 const RLO = String.fromCodePoint(0x202e);
 const NOW = '2026-11-08T12:00:00';
+
+/** The real time now in the account's zone, as Ituran's naive local text. */
+function localNow(): string {
+  const f = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  return f.format(new Date()).replace(' ', 'T');
+}
 
 export const PLATES = [
   '12345678',
@@ -193,6 +210,7 @@ function paging(
   rows: Row[],
   q: URLSearchParams | Row,
   where: 'metadata' | 'top' = 'metadata',
+  max = 2000,
 ): { rows: Row[]; block: Row } | { error: Row } {
   const get = (k: string) =>
     q instanceof URLSearchParams
@@ -202,7 +220,7 @@ function paging(
         : String(q[k]);
   const size = Number(get('page_size') ?? 10);
   const page = Number(get('page_number') ?? 1);
-  if (size < 10 || size > 2000)
+  if (size < 10 || size > max)
     return {
       error: {
         error_code: '400',
@@ -210,7 +228,7 @@ function paging(
         errors: [
           {
             error_code: '1000',
-            error_description: 'PageSize = must be between 10 and 2000',
+            error_description: `PageSize = must be between 10 and ${max}`,
           },
         ],
       },
@@ -339,8 +357,9 @@ export async function startFake(options: FakeOptions = {}) {
         key: string,
         where: 'metadata' | 'top' = 'metadata',
         src: URLSearchParams | Row = q,
+        max = 2000,
       ) => {
-        const p = paging(rows, src, where);
+        const p = paging(rows, src, where, max);
         if ('error' in p) return send(400, p.error);
         return send(200, { ...p.block, [key]: p.rows });
       };
@@ -538,7 +557,8 @@ export async function startFake(options: FakeOptions = {}) {
         );
       }
       if (req.method === 'GET' && path === '/api/v2/drivers')
-        return list(DRIVERS, 'drivers', 'top');
+        // Drivers page at most 1,000 at a time, unlike most lists.
+        return list(DRIVERS, 'drivers', 'top', q, 1000);
       r = req.method === 'GET' ? m(/^\/api\/v2\/drivers\/(\d+)$/) : null;
       if (r) {
         const d = DRIVERS.find((x) => String(x.driver_id) === r?.[1]);
@@ -608,21 +628,28 @@ export async function startFake(options: FakeOptions = {}) {
         });
       }
       if (req.method === 'POST' && path === '/api/v2/diagnostics') {
-        const plates = ((parsed.filter as Row)?.license_plates ??
+        const asked = ((parsed.filter as Row)?.license_plates ??
           []) as string[];
+        // "*" means every vehicle; every third one reports no diagnostics.
+        const plates = asked.includes('*')
+          ? VEHICLES.map((v) => String(v.license_plate))
+          : asked;
         return list(
-          plates.map((p) => ({
+          plates.map((p, i) => ({
             license_plate: p,
             vehicle_id: 1,
             last_location: {},
-            diagnostics: [
-              {
-                name: 'Diagnostic_60',
-                label: 'fuel level - 60',
-                value: 41,
-                timestamp: '2026-11-08T10:00:00',
-              },
-            ],
+            diagnostics:
+              asked.includes('*') && i % 3 === 2
+                ? []
+                : [
+                    {
+                      name: 'Diagnostic_60',
+                      label: 'fuel level - 60',
+                      value: 41,
+                      timestamp: '2026-11-08T10:00:00',
+                    },
+                  ],
           })),
           'vehicles',
         );
@@ -698,6 +725,75 @@ export async function startFake(options: FakeOptions = {}) {
           records: page,
         });
       }
+      if (
+        req.method === 'GET' &&
+        path === '/api/v2/info/ituran-service-centers'
+      ) {
+        const center = (name: string, lat: number, lon: number) => ({
+          name,
+          phone: '03-0000000',
+          opening_hours: '08:00-17:00',
+          location: {
+            point: { lat, lon },
+            address: { location: `${name} Road 1` },
+          },
+        });
+        return send(200, {
+          service_centers: [
+            center('Haifa Center', 32.8, 35.0),
+            center('Tel Aviv Center', 32.09, 34.79),
+            center('Beer Sheva Center', 31.25, 34.79),
+          ],
+        });
+      }
+      if (req.method === 'GET' && path === '/api/v2/bi/groups') {
+        return send(200, [
+          {
+            id: 1,
+            name: 'All vehicles',
+            groups: [
+              { id: 2, name: 'North', groups: [] },
+              { id: 3, name: 'Empty', groups: [] },
+            ],
+          },
+        ]);
+      }
+      if (req.method === 'GET' && path === '/api/v2/safety/groups') {
+        const id = Number(q.getAll('group_ids')[0]);
+        // Any time today counts as the future here.
+        if (String(q.get('to_date')).slice(0, 10) >= localNow().slice(0, 10))
+          return send(400, {
+            error_code: '400',
+            error_description: 'One or more validation errors occurred.',
+            errors: [
+              {
+                error_code: '1000',
+                error_description: 'date canot be future date.',
+              },
+            ],
+          });
+        // Ituran leaves out a group with no safety data.
+        if (id === 3) return send(200, { groups: [] });
+        return send(200, {
+          groups: [
+            { group_id: id, grades: { safety_grade: 70 + id, fuel_grade: 60 } },
+          ],
+        });
+      }
+      if (req.method === 'POST' && path === '/api/v2/safety/periodic') {
+        if (!parsed.period_type)
+          return send(400, {
+            error_code: '400',
+            error_description: "Required property 'period_type' not found",
+          });
+        const monthly = parsed.period_type === 'monthly';
+        return list(
+          (monthly ? ['2026-09', '2026-10'] : ['2026-11-06', '2026-11-07']).map(
+            (p) => ({ period_start: p, safety_grade: 80, fuel_grade: 70 }),
+          ),
+          'safety',
+        );
+      }
       if (req.method === 'POST' && path === '/api/v2/safety/totals') {
         return send(200, {
           totals: {
@@ -731,6 +827,44 @@ export async function startFake(options: FakeOptions = {}) {
           error_code: '404',
           error_description: 'Maintenance was not found',
         });
+      if (options.temps && path === '/api/v1/temperatures/current')
+        return send(200, {
+          vehicles: [
+            {
+              license_plate: PLATES[0],
+              timestamp: NOW,
+              sensors_data: [{ sensor_number: 1, temperature: 4.5 }],
+            },
+          ],
+        });
+      if (options.temps && path === '/api/v1/temperatures/report') {
+        const missing = ['to_date', 'data_frequency'].find((k) => !q.get(k));
+        if (missing)
+          return send(400, {
+            error_code: '400',
+            error_description: 'One or more validation errors occurred.',
+            errors: [
+              {
+                error_code: '1000',
+                error_description: `${missing} is required`,
+              },
+            ],
+          });
+        return send(200, {
+          records: [
+            {
+              timestamp: '2026-11-07T10:00:00',
+              sensor_number: 1,
+              temperature: 4.5,
+            },
+            {
+              timestamp: '2026-11-07T11:00:00',
+              sensor_number: 1,
+              temperature: 5,
+            },
+          ],
+        });
+      }
       if (req.method === 'GET' && path.startsWith('/api/v1/temperatures/'))
         return send(403, {
           error_code: '1006',

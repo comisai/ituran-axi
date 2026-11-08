@@ -5,6 +5,7 @@ import { encode } from '@toon-format/toon';
 import { cacheDir, noteAvailable, noteUnavailable } from '../account.ts';
 import { forgetToken } from '../auth.ts';
 import { alerts, event, events, groups } from '../commands/catalog.ts';
+import { centers } from '../commands/centers.ts';
 import { driver, drivers } from '../commands/drivers.ts';
 import { DESCRIPTION, home } from '../commands/home.ts';
 import { place, places } from '../commands/places.ts';
@@ -87,7 +88,7 @@ export const COMMANDS: readonly Spec[] = [
       fields: {
         ...FIELDS,
         summary:
-          'Columns: plate, name, model, status, color, age, time, speed, limit, lat, lon, address, odometer, driver, places',
+          'Columns: plate, name, model, make, year, status, color, age, time, speed, limit, lat, lon, address, odometer, driver, places',
       },
       limit: LIMIT,
       page: PAGE,
@@ -122,10 +123,20 @@ export const COMMANDS: readonly Spec[] = [
         summary:
           'List only vehicles last seen longer ago than this, such as 2h',
       },
+      near: {
+        type: 'string',
+        value: '<lat,lon>',
+        summary: 'Nearest first from this point, with a km column',
+      },
+      within: {
+        type: 'string',
+        value: '<km>',
+        summary: 'With --near: only vehicles this close',
+      },
       fields: {
         ...FIELDS,
         summary:
-          'Columns: plate, name, model, status, age, time, speed, limit, lat, lon, address, odometer, driver',
+          'Columns: plate, name, model, make, year, status, age, time, speed, limit, lat, lon, address, odometer, driver, places, km',
       },
       limit: LIMIT,
       page: PAGE,
@@ -142,7 +153,7 @@ export const COMMANDS: readonly Spec[] = [
       fields: {
         ...FIELDS,
         summary:
-          'Columns: id, plate, start, end, km, driver, duration, idle, max_speed, safety, events, from, to, status',
+          'Columns: id, plate, start, end, km, driver, duration, idle, max_speed, safety, events, from, to, status, start_lat, start_lon, end_lat, end_lon',
       },
       limit: LIMIT,
       page: PAGE,
@@ -186,6 +197,25 @@ export const COMMANDS: readonly Spec[] = [
     },
     summary: 'GPS odometer estimates',
     run: odometer,
+  },
+  {
+    name: 'centers',
+    args: [],
+    flags: {
+      near: {
+        type: 'string',
+        value: '<plate|lat,lon>',
+        summary: "Nearest first from a vehicle's last position or a point",
+      },
+      limit: {
+        type: 'string',
+        value: '<n>',
+        summary: 'Rows to show, default 10',
+      },
+      full: FULL,
+    },
+    summary: 'Ituran service centers, nearest first',
+    run: centers,
   },
   {
     name: 'drivers',
@@ -285,8 +315,9 @@ export const COMMANDS: readonly Spec[] = [
   },
   {
     name: 'diagnostics',
-    args: [{ name: '<plate>', required: true, variadic: true }],
+    args: [{ name: '<plate>', required: false, variadic: true }],
     flags: {
+      all: { type: 'boolean', summary: 'Every vehicle the account sees' },
       names: {
         type: 'string',
         value: '<a,b>',
@@ -332,9 +363,19 @@ export const COMMANDS: readonly Spec[] = [
   {
     name: 'safety',
     args: [{ name: '<view>', required: false }],
-    flags: { ...WINDOW, limit: LIMIT, page: PAGE, full: FULL },
+    flags: {
+      ...WINDOW,
+      by: {
+        type: 'string',
+        value: '<day|month>',
+        summary: 'Periodic buckets, default day',
+      },
+      limit: LIMIT,
+      page: PAGE,
+      full: FULL,
+    },
     summary:
-      'Safety grades: totals, vehicles, drivers, periodic, ubi-vehicles, ubi-drivers',
+      'Safety grades: totals, vehicles, drivers, groups, periodic, ubi-vehicles, ubi-drivers',
     run: safety,
     service: 'safety grades',
   },

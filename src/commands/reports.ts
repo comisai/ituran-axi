@@ -6,7 +6,7 @@
 import type { CommandInput } from '../cli/table.ts';
 import { usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
-import { hoursMinutes, naiveMs, windowOf } from '../time.ts';
+import { hoursMinutes, naiveMs, windowOf, yesterday } from '../time.ts';
 import { pickColumns } from './catalog.ts';
 import {
   account,
@@ -376,6 +376,7 @@ export async function report(input: CommandInput): Promise<string> {
 
 const SAFETY: Record<string, string> = {
   totals: '/safety/totals',
+  groups: '/safety/groups',
   vehicles: '/safety/vehicles',
   drivers: '/safety/drivers',
   periodic: '/safety/periodic',
@@ -393,10 +394,16 @@ export async function safety(input: CommandInput): Promise<string> {
   const w = windowOf(windowFlags(values), acc.zone, ctx.now, '7d', 'date');
   const limit = intFlag(values.limit, 'limit', 20, 1, REPORT_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
+  if (values.by !== undefined && view !== 'periodic')
+    throw usage('--by applies to safety periodic.');
+  if (values.by !== undefined && values.by !== 'day' && values.by !== 'month')
+    throw usage('--by takes day or month.');
   const body = {
     from_date: w.from,
     to_date: w.to,
-    ...(view === 'periodic' ? { period_type: 'daily' } : {}),
+    ...(view === 'periodic'
+      ? { period_type: values.by === 'month' ? 'monthly' : 'daily' }
+      : {}),
   };
   const head = { window: `${w.from} to ${w.to} (whole days)` };
   if (view === 'totals') {
@@ -428,6 +435,22 @@ export async function safety(input: CommandInput): Promise<string> {
       full: values.full === true,
       narrower: 'ituran-axi safety totals --date <d>',
     });
+  }
+  if (view === 'groups') {
+    // This route counts any time today as the future: its grades cover
+    // whole days up to yesterday, so the window ends there.
+    const last = yesterday(ctx.now, acc.zone);
+    const to = w.to < last ? w.to : last;
+    if (w.from > to)
+      throw usage(
+        `Safety grades by group cover whole days up to yesterday, ${last}. Ask for a window that starts by then.`,
+      );
+    return safetyGroups(
+      ctx,
+      { from: `${w.from}T00:00:00`, to: `${to}T23:59:59` },
+      { window: `${w.from} to ${to} (whole days, up to yesterday)` },
+      values.full === true,
+    );
   }
   const got = await windowRows(
     async (page_number, page_size) => {
@@ -483,5 +506,73 @@ export async function safety(input: CommandInput): Promise<string> {
         : [],
     full: values.full === true,
     narrower: `ituran-axi safety ${view} --date <d>`,
+  });
+}
+
+/** Every group id in Ituran's BI group tree, with its name and depth. */
+function flattenBiGroups(nodes: unknown, depth: number, out: Row[]): Row[] {
+  if (!Array.isArray(nodes)) return out;
+  for (const n of nodes as Row[]) {
+    if (!n || typeof n !== 'object') continue;
+    out.push({ id: n.id ?? null, name: str(n.name) ?? null, depth });
+    flattenBiGroups(n.groups, depth + 1, out);
+  }
+  return out;
+}
+
+/** Safety per vehicle group: Ituran answers one group per request. */
+async function safetyGroups(
+  ctx: Ctx,
+  w: { from: string; to: string },
+  head: Row,
+  full: boolean,
+): Promise<string> {
+  const tree = await ctx.client.read({
+    method: 'GET',
+    path: api(ctx, '/bi/groups'),
+    ctx: { what: 'vehicle groups' },
+    emptyOn404: true,
+  });
+  const groups = flattenBiGroups(tree, 0, []).filter((g) => g.id !== null);
+  const rows: Row[] = [];
+  let empty = 0;
+  await Promise.all(
+    groups.map(async (g) => {
+      const json = obj(
+        await ctx.client.read({
+          method: 'GET',
+          path: api(ctx, '/safety/groups'),
+          query: {
+            group_ids: [String(g.id)],
+            from_date: w.from,
+            to_date: w.to,
+          },
+          ctx: { what: 'safety grades by group' },
+          emptyOn404: true,
+        }),
+      );
+      const found = rowsOf(json, firstArray(json));
+      if (!found.length) empty++;
+      for (const r of found) {
+        const grades = obj(r.grades);
+        rows.push({
+          group: g.name,
+          depth: g.depth,
+          safety: grades.safety_grade ?? r.safety_grade ?? null,
+          fuel: grades.fuel_grade ?? r.fuel_grade ?? null,
+        });
+      }
+    }),
+  );
+  rows.sort((a, b) => Number(a.depth) - Number(b.depth));
+  return listOutput({
+    key: 'groups',
+    summary: `${rows.length} of ${groups.length} groups have safety data${empty ? `; ${empty} have none, which says nothing about how they drive` : ''}`,
+    head,
+    rows,
+    columns: ['group', 'depth', 'safety', 'fuel'],
+    help: [],
+    full,
+    narrower: 'ituran-axi safety groups --date <d>',
   });
 }

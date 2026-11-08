@@ -111,6 +111,12 @@ export interface Window {
 /** Ituran refuses windows that end in the future; this keeps a safe margin. */
 const NOW_MARGIN_MIN = 2;
 
+/** Yesterday's date in `zone`: the last whole day a daily grade covers. */
+export function yesterday(now: Date, zone: string): string {
+  const today = localTime(now, zone).slice(0, 10);
+  return naiveFromMs((naiveMs(today) as number) - 86_400_000).slice(0, 10);
+}
+
 function readTime(text: string, flag: string, end: boolean): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     if (naiveMs(text) === null) throw usage(`--${flag} is not a date.`);

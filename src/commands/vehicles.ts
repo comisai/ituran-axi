@@ -5,6 +5,7 @@
 
 import type { CommandInput } from '../cli/table.ts';
 import { AxiError } from '../errors.ts';
+import { distanceKm, parsePoint, pointOf, roundKm } from '../geo.ts';
 import { normalizePlate } from '../plates.ts';
 import { age, ageMinutes, parseSpan } from '../time.ts';
 import {
@@ -70,6 +71,11 @@ export function vehicleRow(v: Row, now: Date, zone: string): Row {
     plate: str(v.license_plate) ?? null,
     name: str(v.nickname) ?? null,
     model: modelOf(v),
+    make: str(v.make_name) ?? null,
+    year:
+      v.model_year && v.model_year !== '0' && v.model_year !== 0
+        ? Number(v.model_year)
+        : null,
     status: str(v.motion_status) ?? null,
     color: str(v.color) ?? null,
     age: age(loc.timestamp, now, zone),
@@ -97,6 +103,8 @@ const KNOWN = [
   'plate',
   'name',
   'model',
+  'make',
+  'year',
   'status',
   'color',
   'age',
@@ -109,6 +117,7 @@ const KNOWN = [
   'odometer',
   'driver',
   'places',
+  'km',
 ];
 
 function listPage(ctx: Ctx, realtime: readonly string[] = []): FetchPage {
@@ -164,8 +173,20 @@ export async function vehicles(input: CommandInput): Promise<string> {
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
   const columns = columnsFlag(values.fields, LIST_COLUMNS, KNOWN);
   const text = positionals.join(' ').trim();
-  const needsRealtime = columns.some(
-    (c) => !LIST_COLUMNS.includes(c) && c !== 'color',
+  // These columns come from the realtime blocks: position, driver, places.
+  const needsRealtime = columns.some((c) =>
+    [
+      'age',
+      'time',
+      'speed',
+      'limit',
+      'lat',
+      'lon',
+      'address',
+      'odometer',
+      'driver',
+      'places',
+    ].includes(c),
   );
   const realtime = needsRealtime ? REALTIME : [];
   const acc = needsRealtime ? await account(ctx) : null;
@@ -302,7 +323,21 @@ export async function where(input: CommandInput): Promise<string> {
   const acc = await account(ctx);
   const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
-  const columns = columnsFlag(values.fields, WHERE_COLUMNS, KNOWN);
+  const near =
+    typeof values.near === 'string' ? parsePoint(values.near, 'near') : null;
+  const within =
+    typeof values.within === 'string' ? Number.parseFloat(values.within) : null;
+  if (values.within !== undefined && (!near || !(within && within > 0))) {
+    throw new AxiError(
+      'usage',
+      '--within takes kilometres, such as 5, and needs --near <lat,lon>.',
+    );
+  }
+  const columns = columnsFlag(
+    values.fields,
+    near ? ['plate', 'km', 'age', 'status', 'address'] : WHERE_COLUMNS,
+    KNOWN,
+  );
   const staleMin =
     typeof values.stale === 'string' ? parseSpan(values.stale, 'stale') : null;
   let raw: Row[];
@@ -321,7 +356,12 @@ export async function where(input: CommandInput): Promise<string> {
     raw = all.rows;
     partial = all.partial;
   }
-  const rows = raw.map((v) => vehicleRow(v, ctx.now, acc.zone));
+  const rows = raw.map((v) => {
+    const r = vehicleRow(v, ctx.now, acc.zone);
+    const at = pointOf(r.lat, r.lon);
+    if (near) r.km = at ? roundKm(distanceKm(near, at)) : null;
+    return r;
+  });
   const threshold = staleMin ?? 24 * 60;
   const staleOf = (r: Row) => {
     const m = ageMinutes(r.time, ctx.now, acc.zone);
@@ -343,14 +383,29 @@ export async function where(input: CommandInput): Promise<string> {
     `${stale} last seen over ${span} ago`,
     ...(noPosition ? [`${noPosition} with no position`] : []),
   ];
-  const selected = staleMin !== null ? rows.filter(staleOf) : rows;
+  let selected = staleMin !== null ? rows.filter(staleOf) : rows;
+  if (near) {
+    // Nearest first; a vehicle with no position cannot be placed.
+    selected = selected
+      .filter(
+        (r) => r.km !== null && (within === null || (r.km as number) <= within),
+      )
+      .sort((a, b) => (a.km as number) - (b.km as number));
+  }
   const offset = (page - 1) * limit;
   const shown = selected.slice(offset, offset + limit);
   const help: string[] = [];
   if (offset + shown.length < selected.length) {
     const args = plates.length ? plates : ['--all'];
+    const nearArgs = near
+      ? [
+          '--near',
+          `${near.lat},${near.lon}`,
+          ...(within !== null ? ['--within', String(within)] : []),
+        ]
+      : [];
     help.push(
-      `Run \`ituran-axi where ${[...args, ...(staleMin !== null ? ['--stale', span] : []), '--page', String(page + 1), ...(limit !== 20 ? ['--limit', String(limit)] : [])].join(' ')}\` for the next ${Math.min(limit, selected.length - offset - shown.length)}`,
+      `Run \`ituran-axi where ${[...args, ...nearArgs, ...(staleMin !== null ? ['--stale', span] : []), '--page', String(page + 1), ...(limit !== 20 ? ['--limit', String(limit)] : [])].join(' ')}\` for the next ${Math.min(limit, selected.length - offset - shown.length)}`,
     );
   }
   if (shown.length)
@@ -359,8 +414,11 @@ export async function where(input: CommandInput): Promise<string> {
     );
   if (shown.length)
     help.push('Run `ituran-axi trips <plate> --since 24h` for where it went');
-  const listed =
-    staleMin !== null ? `${selected.length} last seen over ${span} ago` : null;
+  const listed = near
+    ? `${selected.length} ${within !== null ? `within ${within} km of` : 'by distance from'} ${near.lat},${near.lon}${staleMin !== null ? `, last seen over ${span} ago` : ''}`
+    : staleMin !== null
+      ? `${selected.length} last seen over ${span} ago`
+      : null;
   return listOutput({
     key: 'vehicles',
     summary: parts.join(' · '),

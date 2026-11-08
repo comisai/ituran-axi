@@ -6,7 +6,7 @@ A command-line tool for AI agents to read Ituran vehicle tracking: vehicles and 
 - It ends with hints for the next command.
 - It only reads.
 
-It replaces `ituran-mcp` for agents with a shell. It has 23 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It is built to run inside Comis, behind the Comis Gate, and it also works on its own.
+It replaces `ituran-mcp` for agents with a shell. It has 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It is built to run inside Comis, behind the Comis Gate, and it also works on its own.
 
 **Status:** every command is qualified live on a production account. `test/live/ituran-live.mjs --strict --deep --parity` passes all 14 stages. Comis custody waits on two Gate decisions. See `docs/ituran-axi-master-plan.md`.
 
@@ -28,20 +28,21 @@ It replaces `ituran-mcp` for agents with a shell. It has 23 commands instead of 
 ituran-axi                                  home view: account, zone, vehicles, next steps
 ituran-axi vehicles [<text>]                list, or find by plate digits, name, make or model
 ituran-axi vehicle <plate>                  last position with address, current driver, saved places
-ituran-axi where [<plate>...] [--all] [--stale 2h]
+ituran-axi where [<plate>...] [--all] [--stale 2h] [--near <lat,lon> [--within <km>]]
 ituran-axi trips [<plate>...] [--since 24h | --from <t> [--to <t>] | --date <d>]
 ituran-axi trip <id> [--points] [--safety] [--speeding]
 ituran-axi totals [<plate>] [window]        trip totals for the account or one vehicle
 ituran-axi odometer <plate>... | --all      GPS odometer estimates with their reliability
+ituran-axi centers [--near <plate|lat,lon>]        Ituran service centers, nearest first
 ituran-axi drivers [<text>] | driver <id>
 ituran-axi places [<text>] | place <id> [--vehicles]
 ituran-axi groups [<id>]
 ituran-axi events [--all] | event <id>      event states and the vehicles in each now
 ituran-axi alerts [--plate <plate>]         alert definitions
-ituran-axi diagnostics <plate>... [--names a,b] [--history --date <d>]
+ituran-axi diagnostics <plate>... | --all [--names a,b] [--history --date <d>]
 ituran-axi report daily|periodic|idle [<plate>...] [--drivers] [window]
 ituran-axi report speed|events|engine|full|diagnostics|heat-map <plate>... [window] [--over <km/h>]
-ituran-axi safety [totals|vehicles|drivers|periodic|ubi-vehicles|ubi-drivers] [window]
+ituran-axi safety [totals|vehicles|drivers|groups|periodic [--by day|month]|ubi-vehicles|ubi-drivers] [window]
 ituran-axi maintenance [<plate>] [--types]
 ituran-axi temps [current|history <plate>|breaches]
 ituran-axi logout
