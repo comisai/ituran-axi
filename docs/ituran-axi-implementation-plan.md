@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | M2, M3 and M4 done on 2026-11-08. Every read command is built, tested (57 tests) and passes the live gate on production. Release waits on Q5; Comis custody waits on C1 and C2 (master plan §8). |
+| Status | M2, M3 and M4 done on 2026-11-08. Every read command is built, tested (62 tests) and passes the live gate on production, including the owner's 126 questions (S14). Release waits on V1; Comis custody waits on the C1 and C2 reviews (master plan §8). |
 | Date | 2026-11-08 |
 | Design | `ituran-axi-design.md` |
 | Master plan | `ituran-axi-master-plan.md` |
@@ -36,7 +36,7 @@ None of that blocks the AXI. It is built against a fake Ituran that copies what 
 Target: `https://api.ituran.com/api/v2`, the owner's production service account. Command:
 
 ```sh
-node --env-file=test/live/.env.prod test/live/ituran-live.mjs --deep --parity
+node --env-file=test/live/.env.prod test/live/ituran-live.mjs --strict --deep --parity --use-cases
 ```
 
 | Stage | Result | Evidence |
@@ -55,6 +55,9 @@ node --env-file=test/live/.env.prod test/live/ituran-live.mjs --deep --parity
 | S11 AXI smoke | pass | 26 runs of the built `ituran-axi` with the run's token, covering every command family. Each exits as expected, prints the expected TOON, stays under 4,000 characters, and writes nothing to stderr. |
 | S12 MCP parity | pass | `ituran-mcp@4.2.0` read-only, with the vehicles and users families: 8 tools, and the same vehicle total as the direct read |
 | S13 Gate rules | pass | 43 distinct routes. Each one ituran-axi uses is credentialed and passes as a read. The token route gets no token and is denied. Device commands, share-drive, user settings and every write are denied. `test/contract/comis-bundle.test.ts` checks the same entry against every request the AXI itself sends. |
+| S14 use cases | pass | The 126 questions of `ituran-mcp`'s `docs/USER-PROMPTS.md`, in 27 areas, ran as 124 AXI commands. 117 are answered. The other 9 are ITC temperature questions, which this account lacks (`1006`), and the AXI says so. The first runs failed 4 questions, which found F18 to F20. |
+
+The S14 run that passed was made with the run's token (`ITURAN_TOKEN`), so S3 and S12 were skipped. The two runs before it passed S1 to S13 with password grants, one of them form-encoded (F21).
 
 ### 2.1 Findings that changed the design
 
@@ -79,6 +82,10 @@ All of these are in `ituran-axi-design.md`.
 | F15 | Batch location now returns a top-level `pagination` block, which `ituran-mcp` did not see | Recorded as drift. The AXI does not use the route. |
 | F16 | Default output stops at about 4,000 characters, so a pipeline over every row needs `--full` | The skill's recipes use `--full` and say why. |
 | F17 | A unit test found `Date.UTC` rolling 2026-13-01 over into 2027 | `naiveMs` refuses dates that do not survive the round trip. |
+| F18 | Drivers refuse `page_size` above 1,000, as BI reports and safety do | `drivers` caps `--limit` at 1,000 and walks its text search 1,000 at a time. The fake refuses 1,001. Found by S14. |
+| F19 | Temperature history (`/api/v1/temperatures/report`) requires `to_date` and `data_frequency`, the sampling step in minutes. It checks them before entitlement, so this account got 400, not `1006`. | `temps history` sends both, sampling hourly. Found by S14. |
+| F20 | `safety/groups` takes times, one group per call, and counts any time today as the future ("date canot be future date.") | Its window ends at the end of yesterday, and a window inside today is a usage error. The fake refuses today. Found by S14, then probed live. |
+| F21 | The token route accepts the grant as the Comis Gate would send it: form-encoded, with `device_id: comis-gate` | `--form-grant` signs in that way. It confirms C1's wire on production. |
 
 ## 3. Build order
 
@@ -178,14 +185,16 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 
 | Tasks | State | Evidence |
 | --- | --- | --- |
-| T1 to T13 (M2) | **Done** | `npm run check`: typecheck, lint and 57 tests (unit, contract, Comis bundle, AXI principles). `npm run test:dist` against the built package. Live S11 passes. |
+| T1 to T13 (M2) | **Done** | `npm run check`: typecheck, lint and 62 tests (unit, contract, Comis bundle, AXI principles). `npm run test:dist` runs 43 of them against the built package. Live S11 passes. |
 | T14 to T19 (M3) | **Done** | Every command in design §7 runs against the fake and, in S11, against production. `temps` is built, but this account answers `not_entitled`, so it stays unqualified until an entitled account exists. |
 | T20 | **Done** | S11 covers 26 runs. `--parity` (S12) compares vehicle totals with `ituran-mcp@4.2.0`. Per-command parity cases remain. |
-| T21 (M4) | **Done** | `ituran-live --strict --deep --parity`: 14 of 14 stages pass. The report is in `test/live/reports/`. |
+| T21 (M4) | **Done** | `ituran-live --strict --deep --parity --use-cases`: S1 to S14 pass. The reports are in `test/live/reports/`. |
 | T22 | **Done** | `README.md`, `NOTICE` with the port credit, and `--help` reviewed (overview under 2,000 characters, each command under 1,500) |
 | T23, T24 (M5) | Waiting | The repository `comisai/ituran-axi` exists and is private. npm provenance needs it public (master plan V1). |
 | T25 | **Done** | `comis/`: catalog entry, skill and recipes (each recipe run live), wrapper, README. Checked by `test/contract/comis-bundle.test.ts`. |
 | T26 | **Done** | `comis/decisions.md`: the C1 and C2 drafts with their failure-mode tests |
+| T27 | **Done** | Commands for the owner's questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`: `where --near/--within`, `centers`, `diagnostics --all`, `safety groups`, `safety periodic --by day|month`, trip start and end coordinates, and vehicle make and year. Each has contract tests. |
+| T28 | **Done** | S14 (`--use-cases`) runs the 126 questions in `USER-PROMPTS.md` as AXI commands on production. Its first runs found F18 to F20. |
 
 
 ### M2: core reads on the fake
@@ -266,10 +275,11 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 | S11 AXI smoke | The built `ituran-axi` with this run's token: exit codes, TOON, the 4,000-character bound | The shipped binary |
 | S12 parity (`--parity`) | `ituran-mcp@4.2.0` read-only agrees with the direct reads | The conversion |
 | S13 Gate rules | Every route the run made, judged by `comis/key-services/ituran.json` | C3, R2, R5 |
+| S14 use cases (`--use-cases`) | The 126 owner questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`, each run as the AXI commands that answer it, filled in from this account's own plates, trips, places, events and groups. Each must answer, or name a service the account lacks. | The command set against real questions; F18 to F20 |
 
 **Safety rules, built into the code:**
 - **Reads only.** The one HTTP helper sends GET, POST only to Ituran's read routes, and the token grant. Anything else is refused before it leaves the process.
-- **Few sign-ins.** At most three requests to the token route per run: the account's grant, an unknown-user grant and its form-encoded twin, plus one refresh. `--parity` adds `ituran-mcp`'s one grant. S11 hands the AXI the run's token, so the AXI does not sign in.
+- **Few sign-ins.** At most three requests to the token route per run: the account's grant, an unknown-user grant and its form-encoded twin, plus one refresh. `--parity` adds `ituran-mcp`'s one grant. S11 and S14 hand the AXI the run's token, so the AXI does not sign in. `--form-grant` sends the account's grant form-encoded, as the Gate would (F21), instead of as JSON.
 - **Paced.** One request at a time, starts at least 400 ms apart.
 - **Nothing secret stored.** The password and tokens are never printed or stored. Plates are scrubbed from every string.
 - **No personal data in the report.** It records statuses, timings, counts, field names and value shapes, never values. It is written with mode 0600.
@@ -279,7 +289,7 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 cp test/live/.env.example test/live/.env.prod                                   # fill in; gitignored
 node --env-file=test/live/.env.prod test/live/ituran-live.mjs                   # daily while building
 node --env-file=test/live/.env.prod test/live/ituran-live.mjs --deep --parity   # weekly, and before a release
-node --env-file=test/live/.env.prod test/live/ituran-live.mjs --strict --deep --parity  # milestone gate
+node --env-file=test/live/.env.prod test/live/ituran-live.mjs --strict --deep --parity --use-cases  # milestone gate
 ```
 
 **Exit codes:**
