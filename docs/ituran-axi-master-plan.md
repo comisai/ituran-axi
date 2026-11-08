@@ -37,7 +37,7 @@ Updated 2026-11-08 from three live runs (`test/live/reports/2026-11-08T10-*.json
 | Comis bundle | **Drafted and tested here** | `comis/`: catalog entry, skill and recipes, wrapper, C1 and C2 drafts; `test/contract/comis-bundle.test.ts` |
 | Not entitled on this account | Known | ITC (`1006`), advanced alerts (403), event types (`1032`), drive-permission groups (`403.2`) |
 | Writes | Not planned for 0.1.0 | No QA account, no authorization (W1) |
-| Comis connector | Not started in Comis | Needs the C1 and C2 decisions, then M5 |
+| Comis connector | Proposed in Comis | [PR #3617](https://github.com/comisai/comis/pull/3617) adds the proposal (it decides nothing). Code waits on the C1 and C2 decisions, then M5. |
 
 ## 3. Workstreams
 
@@ -61,7 +61,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M3 | Every read | B | M2 | Contract tests for T14 to T19; live S11 and S12 cover every command (T20) | **Done 2026-11-08** (per-command parity cases remain) |
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
 | M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Waiting on V1. The repository `comisai/ituran-axi` was created on 2026-11-08 and is private. |
-| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | Drafts ready in `comis/decisions.md` |
+| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | Proposal in Comis: [PR #3617](https://github.com/comisai/comis/pull/3617), `docs/research/Ituran Connector Proposal for Comis v2.md`. The drafts are in `comis/decisions.md`. |
 | M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
 | M9 | Writes and composites | E | M8, W1, Q6 | Phase 3 writes qualified on QA; phase 4 commands each with a parity test | Later |

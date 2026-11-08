@@ -42,6 +42,8 @@ The Comis proofs (design §13) must still run the real Gate.
 
 ## Landing it in Comis (after M5 and the C1 and C2 decisions)
 
+The proposal is in Comis as `docs/research/Ituran Connector Proposal for Comis v2.md` ([PR #3617](https://github.com/comisai/comis/pull/3617)).
+
 1. **C1: the Gate password grant** (`decisions.md`). Until it lands, the entry's `"oauth": "ituran"` has nothing to name. If Ituran issues a static key instead (master plan Q1), replace it with `"secret": "ituran"` and drop C1.
 2. **C2: keep Ituran's 403** (`decisions.md`).
 3. **C5: the pack and the provenance check.** This is shared with `priority-axi`.
