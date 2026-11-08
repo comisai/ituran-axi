@@ -1,0 +1,39 @@
+name: release
+# Publishes ituran-axi to npm with signed provenance when a v* tag is pushed.
+# Comis installs AXIs only when their provenance names the source repository
+# (D335; scripts/axi-publishers.mjs), and npm provenance needs a public
+# repository (master plan V1).
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Refuse a private repository
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "npm provenance needs a public repository; make comisai/ituran-axi public first (master plan V1)."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:dist
+      - run: node scripts/check-package.mjs
+      - run: npm publish --provenance --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

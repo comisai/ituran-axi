@@ -1,6 +1,6 @@
 {
   "name": "ituran-axi",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "AXI command-line tool over the Ituran vehicle tracking API",
   "license": "MIT",
   "type": "module",
@@ -10,6 +10,7 @@
   "files": [
     "dist",
     "README.md",
+    "LICENSE",
     "NOTICE"
   ],
   "engines": {
@@ -27,6 +28,7 @@
     "test": "node --test \"test/unit/**/*.test.ts\" \"test/contract/**/*.test.ts\" \"test/axi/**/*.test.ts\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "live": "node test/live/ituran-live.mjs",
+    "check:package": "node scripts/check-package.mjs",
     "test:dist": "ITURAN_AXI_BIN=dist node --test \"test/contract/**/*.test.ts\" \"test/axi/**/*.test.ts\""
   },
   "dependencies": {

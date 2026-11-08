@@ -190,7 +190,8 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 | T20 | **Done** | S11 covers 26 runs. `--parity` (S12) compares vehicle totals with `ituran-mcp@4.2.0`. Per-command parity cases remain. |
 | T21 (M4) | **Done** | `ituran-live --strict --deep --parity --use-cases`: S1 to S14 pass. The reports are in `test/live/reports/`. |
 | T22 | **Done** | `README.md`, `NOTICE` with the port credit, and `--help` reviewed (overview under 2,000 characters, each command under 1,500) |
-| T23, T24 (M5) | Waiting | The repository `comisai/ituran-axi` exists and is private. npm provenance needs it public (master plan V1). |
+| T23 | **Done** | `.github/workflows/release.yml` publishes on a `v*` tag with `npm publish --provenance`, after the full check and `scripts/check-package.mjs`. It refuses while the repository is private. The version is 0.1.0. |
+| T24 (M5) | Waiting | The owner makes the repository public (V1) and adds `NPM_TOKEN`; then tag `v0.1.0` and rerun the live test against the published package. |
 | T25 | **Done** | `comis/`: catalog entry, skill and recipes (each recipe run live), wrapper, README. Checked by `test/contract/comis-bundle.test.ts`. |
 | T26 | **Done** | `comis/decisions.md`: the C1 and C2 drafts with their failure-mode tests |
 | T27 | **Done** | Commands for the owner's questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`: `where --near/--within`, `centers`, `diagnostics --all`, `safety groups`, `safety periodic --by day|month`, trip start and end coordinates, and vehicle make and year. Each has contract tests. |
