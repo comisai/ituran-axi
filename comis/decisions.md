@@ -2,6 +2,10 @@
 
 Both change the Gate, a high-risk area under AGENTS.md §6. Each needs its own decision record, threat note and failure-mode tests before any code. This file is input for those records. It is not a decision.
 
+**Where they went (2026-11-08).** Both are now decision records in Comis pull requests, and those records are authoritative:
+- C1 became [D3630](https://github.com/comisai/comis/pull/3630). It is built as a closed `EXCHANGES` table and a credential field, `exchange: ituran`, beside a stored `secret`, not as a new OAuth provider as drafted below. That keeps the key page's two-part key and needs no CLI or Hub flow.
+- C2 became [D3617](https://github.com/comisai/comis/pull/3617), as drafted. Any challenge header is dropped, and a 403 without one, as Ituran sends, passes through the rest of response custody.
+
 ## C1: a password-grant connection for Ituran
 
 **Need.** Ituran's API takes a bearer token that lives 24 hours. The only way to get one is the identity route's password grant, `POST https://api.ituran.com/api/v1/oauth/token`.

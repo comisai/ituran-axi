@@ -7,7 +7,7 @@ This folder holds everything the Comis repository needs to connect Ituran throug
 | `key-services/ituran.json` | C3: the catalog entry | `catalog/key-services.json`, key `ituran` |
 | `skills/ituran/SKILL.md`, `recipes.md` | C4: the read skill (`main reader`) | `images/packs/apps/skills/ituran/` |
 | `bin/ituran-axi` | C5: the pack wrapper | `images/packs/apps/bin/ituran-axi` |
-| `decisions.md` | C1 and C2: drafts for two decision records | `docs/decisions/` |
+| `decisions.md` | C1 and C2: the drafts behind D3630 and D3617 | `docs/decisions/` (in PRs #3630 and #3617) |
 
 ## What is proven here
 
@@ -40,17 +40,19 @@ The matcher follows the Gate's rules as `priority-axi` recorded them:
 
 The Comis proofs (design §13) must still run the real Gate.
 
-## Landing it in Comis (after M5 and the C1 and C2 decisions)
+## Landing it in Comis
 
-The proposal is in Comis as `docs/research/Ituran Connector Proposal for Comis v2.md` ([PR #3617](https://github.com/comisai/comis/pull/3617)).
+In review, 2026-11-08:
+- [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal (`docs/research/Ituran Connector Proposal for Comis v2.md`) and C2, decision D3617.
+- [PR #3630](https://github.com/comisai/comis/pull/3630), stacked on #3617: C1, decision D3630, and C3, the catalog entry.
 
-1. **C1: the Gate password grant** (`decisions.md`). Until it lands, the entry's `"oauth": "ituran"` has nothing to name. If Ituran issues a static key instead (master plan Q1), replace it with `"secret": "ituran"` and drop C1.
-2. **C2: keep Ituran's 403** (`decisions.md`).
+1. **C1: the Gate password exchange** (D3630, PR #3630). The credential names `"exchange": "ituran"` beside `"secret": "ituran"`. If Ituran issues a static key instead (master plan Q1), drop the `exchange` field.
+2. **C2: keep Ituran's 403** (D3617, PR #3617). Its first version raised on a 403 with no challenge header, which is what Ituran sends; the PR's no-challenge test caught it.
 3. **C5: the pack and the provenance check.** This is shared with `priority-axi`.
    - Add `"ituran-axi": "<version>"` to `images/packs/apps/package.json` and refresh its lock.
    - Add the source repository to `scripts/axi-publishers.json`.
    - Copy the wrapper, and add `ituran-axi` to `doctor/probe` and `NOTICE`.
-4. **C3: the catalog entry.** Merge `key-services/ituran.json`, and add `ituran` to the connect list and the key page, which needs two fields: username and password.
+4. **C3: the catalog entry** (PR #3630). `key-services/ituran.json` mirrors it, and `test/contract/comis-bundle.test.ts` checks the mirror. The key page labels its two fields Username and Password.
 5. **C4: the skill.** Copy `skills/ituran/`.
 6. **C6: proofs.** Add a fake Ituran to `tests/integration/connectors/`, using `test/fake/ituran-fake.ts` as the reference for its answers. Then run:
    - `ituran-reads`

@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity`, 14 of 14 stages, 2026-11-08). Release waits on making the repository public (V1). Comis custody waits on two Gate decisions (C1, C2). |
+| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. Release waits on making the repository public (V1). C1, C2 and C3 are built in Comis and in review: [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |
 | Date | 2026-11-08 |
 | Design | `ituran-axi-design.md` |
-| Implementation plan | `ituran-axi-implementation-plan.md` (tasks T1 to T26, test plan) |
+| Implementation plan | `ituran-axi-implementation-plan.md` (tasks T1 to T28, test plan) |
 | Live test | `test/live/ituran-live.mjs`; reports in `test/live/reports/` (gitignored) |
 
 ## 1. Goal
@@ -21,7 +21,7 @@ A Comis worker can answer the owner's questions about their vehicles: where they
 
 ## 2. Status board
 
-Updated 2026-11-08 from three live runs (`test/live/reports/2026-11-08T10-*.json`).
+Updated 2026-11-08 from the live runs in `test/live/reports/2026-11-08T*.json`.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
@@ -32,12 +32,14 @@ Updated 2026-11-08 from three live runs (`test/live/reports/2026-11-08T10-*.json
 | Error shapes | **Done** | S2, S8, S6: 400 for a missing header, 401, 403 `1020`, `1006` and `403.2`, 400 `1000` and `1032`, 404 |
 | Draft Gate entry against real traffic | **Done** | S13: every AXI route credentialed as a read; identity, commands and writes denied |
 | Parity reference (`ituran-mcp` 4.2.0) | **Done** | S12: same vehicle total |
-| AXI code | **Done** | All 23 commands. 57 tests pass on the source and the built package. |
+| AXI code | **Done** | All 24 commands. 62 tests pass on the source, and 43 of them on the built package. |
 | Live AXI qualification | **Done** | S11: 26 runs of the built AXI on production; S12 parity; S13 Gate rules |
+| Owner questions (`USER-PROMPTS.md`) | **Done** | S14: 126 questions, 124 commands. 117 answered, and 9 name ITC, which this account lacks. The first runs found F18 to F20. |
+| Gate sign-in wire (C1) | **Done** | `--form-grant`: production accepts the grant as the Gate sends it (F21) |
 | Comis bundle | **Drafted and tested here** | `comis/`: catalog entry, skill and recipes, wrapper, C1 and C2 drafts; `test/contract/comis-bundle.test.ts` |
 | Not entitled on this account | Known | ITC (`1006`), advanced alerts (403), event types (`1032`), drive-permission groups (`403.2`) |
 | Writes | Not planned for 0.1.0 | No QA account, no authorization (W1) |
-| Comis connector | Proposed in Comis | [PR #3617](https://github.com/comisai/comis/pull/3617) adds the proposal (it decides nothing). Code waits on the C1 and C2 decisions, then M5. |
+| Comis connector | **In review** | [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal and C2 (D3617). [PR #3630](https://github.com/comisai/comis/pull/3630), stacked on it: C1 (D3630) and the C3 catalog entry, with failure-mode tests and mutation rows. The pack, skill and proofs (C4 to C7) wait on M5. |
 
 ## 3. Workstreams
 
@@ -61,7 +63,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M3 | Every read | B | M2 | Contract tests for T14 to T19; live S11 and S12 cover every command (T20) | **Done 2026-11-08** (per-command parity cases remain) |
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
 | M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Waiting on V1. The repository `comisai/ituran-axi` was created on 2026-11-08 and is private. |
-| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | Proposal in Comis: [PR #3617](https://github.com/comisai/comis/pull/3617), `docs/research/Ituran Connector Proposal for Comis v2.md`. The drafts are in `comis/decisions.md`. |
+| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | In review: D3617 in [PR #3617](https://github.com/comisai/comis/pull/3617) and D3630 in [PR #3630](https://github.com/comisai/comis/pull/3630), both with code and tests. Merging is the maintainers' call. |
 | M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
 | M9 | Writes and composites | E | M8, W1, Q6 | Phase 3 writes qualified on QA; phase 4 commands each with a parity test | Later |
@@ -88,7 +90,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** V1 → M5, and M6 (C1 and C2 reviews) → M7 → M8. M2 to M4 are done, so the Comis Gate review is the longest remaining piece.
+**Critical path, now:** V1 → M5, and M6 (the reviews of PRs #3617 and #3630) → M7 → M8. M2 to M4 are done, and C1 to C3 are written, so the Comis review is the longest remaining piece.
 
 ## 6. Schedule
 
@@ -116,7 +118,7 @@ gantt
 | M2, M3, M4 | **Done 8 Nov** | |
 | M5 | 16 Nov | The repository is public (V1), and the release workflow has npm access for `comisai`, by 11 November |
 | M6 | 21 Nov | The Comis maintainers review both decision records together |
-| M7 | about 5 Dec | C1 is the largest piece: a provider entry, the key page's two fields, and failure-mode tests |
+| M7 | about 5 Dec | C1 and C3 are written (PR #3630). What remains is the pack, skill and proofs (C4 to C7), after M5 |
 | M8 (owner using it) | about 9 Dec | |
 | M9 | Q1 2027 | A QA account exists (Q6) |
 
@@ -169,7 +171,7 @@ Send one request:
 
 | ID | Risk | Likelihood | Impact | Mitigation | Owner |
 | --- | --- | --- | --- | --- | --- |
-| K1 | The Comis review of C1 (Gate sign-in) takes long | Medium | High: blocks M7 | Ask Q1 first. Write the decision record now (M6). Keep C1 to one closed provider entry plus the key page's second field. | Developer |
+| K1 | The Comis review of C1 (Gate sign-in) takes long | Medium | High: blocks M7 | Ask Q1 first. The decision record and code are up for review (D3630, PR #3630). C1 is one closed table entry, and the key page's two-part key already exists. | Developer |
 | K2 | The IP gets blocked (HTTP 474) during development or by Comis | Low | High | Token cache (F2), at most three token-route requests per live run, the Gate's single connection, allowlisting (Q3) | Developer, owner |
 | K3 | Ituran changes behavior silently, as it has before | Medium | Medium | Weekly live runs; the fake follows the live facts; quirks are named in the output | Developer |
 | K4 | Personal data leaks through output or logs | Low | High | Few default fields; contacts not read; the skill forbids sending positions to the web; reports keep shapes only | Developer |
