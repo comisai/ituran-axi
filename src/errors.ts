@@ -110,6 +110,8 @@ const GATE_REFUSALS: Record<string, string> = {
     "The Gate withheld Ituran's answer because it carried a credential.",
   out_of_budget:
     'The Gate refused this request: the spending budget is used up.',
+  unavailable:
+    'The Gate is signing in to Ituran, or cannot reach it now. Try again in a minute.',
 };
 
 export function classify(

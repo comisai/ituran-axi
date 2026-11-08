@@ -1,9 +1,10 @@
 {
   "title": "Ituran",
-  "key_help": "Ituran: the username and password of a service account without two-step sign-in",
+  "key_help": "the username and password of an Ituran service account without two-step sign-in; the Gate signs in with them and keeps the token",
   "hosts": ["api.ituran.com"],
   "credential": {
-    "oauth": "ituran",
+    "secret": "ituran",
+    "exchange": "ituran",
     "inject": "bearer",
     "match": [
       "GET /api/v2/users/me",
@@ -64,14 +65,44 @@
     "POST /api/v2/safety/ubi/{vehicles|drivers}"
   ],
   "writes": [
-    { "match": "* /api/v1/oauth/{path...}", "decide": "deny" },
-    { "match": "* /api/v2/commands/{path...}", "decide": "deny" },
-    { "match": "* /api/v2/vehicles/{plate}/share-drive", "decide": "deny" },
-    { "match": "* /api/v2/drive-permission-group", "decide": "deny" },
-    { "match": "* /api/v2/drive-permission-group/{path...}", "decide": "deny" },
-    { "match": "* /api/v2/users/{path...}", "decide": "deny" },
-    { "match": "* /api/v2/app/{path...}", "decide": "deny" },
-    { "match": "* *", "decide": "deny" }
+    {
+      "match": "* /api/v1/oauth/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/commands/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/vehicles/{plate}/share-drive",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/drive-permission-group",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/drive-permission-group/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/users/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/app/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* *",
+      "decide": "deny"
+    }
   ],
+  "forbidden": "entitlement",
+  "compose": {
+    "parts": ["username", "password"],
+    "value": "{username} {password}",
+    "part_pattern": "^[\\x21-\\x7e]{1,256}$"
+  },
   "variable": "ITURAN_TOKEN"
 }

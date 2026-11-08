@@ -176,6 +176,12 @@ describe('errors', () => {
       code(403, undefined, { 'comis-refusal': 'destination_refused' }),
       'refused',
     );
+    // The Gate signing in to Ituran for a password-exchange connection.
+    const waiting = classify(
+      answer(503, undefined, { 'comis-refusal': 'unavailable' }),
+    );
+    assert.equal(waiting?.code, 'refused');
+    assert.match(String(waiting?.message), /signing in to Ituran/);
     assert.equal(code(474), 'access_blocked');
     assert.equal(code(401, { error_code: '401' }), 'auth_failed');
     assert.equal(
