@@ -176,6 +176,14 @@ describe('AXI principles', () => {
     assert.equal(r.code, 2);
     assert.match(r.stdout, /Unknown flag --password/);
     assert.doesNotMatch(r.stdout, /hunter2/);
+    // A flag and its value run together are named by neither.
+    const odd = await run('vehicles', '--date 2026-11-07');
+    assert.equal(odd.code, 2);
+    assert.match(
+      odd.stdout,
+      /Unknown flag for `ituran-axi vehicles`\. Valid flags/,
+    );
+    assert.doesNotMatch(odd.stdout, /2026-11-07|that flag/);
   });
 
   it('fits default output in 4,000 UTF-16 units', async () => {

@@ -17,8 +17,9 @@ export interface Parsed {
   tokens: Token[];
 }
 
+// An odd flag is not echoed: it may hold a value meant for somewhere else.
 const shownFlag = (raw: string) =>
-  /^--?[A-Za-z0-9][A-Za-z0-9-]{0,40}$/.test(raw) ? raw : 'that flag';
+  /^--?[A-Za-z0-9][A-Za-z0-9-]{0,40}$/.test(raw) ? ` ${raw}` : '';
 
 export function parseCommand(spec: CommandSpec, argv: string[]): Parsed {
   const name = commandName(spec);
@@ -57,7 +58,7 @@ export function parseCommand(spec: CommandSpec, argv: string[]): Parsed {
     const f = spec.flags[token.name];
     if (!f) {
       throw usage(
-        `Unknown flag ${shownFlag(token.rawName)} for \`${name}\`. ${valid.length ? `Valid flags: ${valid.join(', ')}.` : 'It takes no flags.'}`,
+        `Unknown flag${shownFlag(token.rawName)} for \`${name}\`. ${valid.length ? `Valid flags: ${valid.join(', ')}.` : 'It takes no flags.'}`,
       );
     }
     if (f.type === 'boolean' && token.inlineValue)
