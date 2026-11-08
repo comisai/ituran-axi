@@ -1,0 +1,13 @@
+ituran-axi
+Copyright (c) 2026 ituran-axi contributors. MIT License; see LICENSE.
+
+Parts of src/auth.ts, src/json.ts, src/time.ts and src/commands/reports.ts are
+ported from ituran-mcp (https://github.com/ituranlabs/ituran-mcp), MIT License,
+Copyright (c) 2026 Ituran: the identity grants and their
+minutes-based expiry, parsing of integers above 2^53, Windows time zone names,
+and the operational report cursor rules.
+
+Runtime dependency: @toon-format/toon 4.4.0, MIT License.
+
+Ituran is a trademark of Ituran Location and Control Ltd. This project is not
+made or endorsed by Ituran.

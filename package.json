@@ -1,0 +1,36 @@
+{
+  "name": "ituran-axi",
+  "version": "0.0.0",
+  "description": "AXI command-line tool over the Ituran vehicle tracking API",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ituran-axi": "dist/bin/ituran-axi.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/chmod-bin.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "node --test \"test/unit/**/*.test.ts\" \"test/contract/**/*.test.ts\" \"test/axi/**/*.test.ts\"",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "live": "node test/live/ituran-live.mjs",
+    "test:dist": "ITURAN_AXI_BIN=dist node --test \"test/contract/**/*.test.ts\" \"test/axi/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@toon-format/toon": "4.4.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
