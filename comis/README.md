@@ -42,7 +42,7 @@ The Comis proofs (design §13) must still run the real Gate.
 
 ## Landing it in Comis
 
-In review, 2026-11-08:
+Merged into Comis `main` on 2026-11-08:
 - [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal (`docs/research/Ituran Connector Proposal for Comis v2.md`) and C2, decision D3617.
 - [PR #3630](https://github.com/comisai/comis/pull/3630), stacked on #3617: C1, decision D3630, and C3, the catalog entry.
 

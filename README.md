@@ -8,7 +8,7 @@ A command-line tool for AI agents to read Ituran vehicle tracking: vehicles and 
 
 It replaces `ituran-mcp` for agents with a shell. It has 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It is built to run inside Comis, behind the Comis Gate, and it also works on its own.
 
-**Status:** every command is qualified live on a production account. `test/live/ituran-live.mjs --strict --deep --parity --use-cases` passes, including the 126 owner questions of `ituran-mcp`'s `docs/USER-PROMPTS.md`. The Comis Gate changes it needs are in review: comisai/comis#3617 and comisai/comis#3630. See `docs/ituran-axi-master-plan.md`.
+**Status:** every command is qualified live on a production account. `test/live/ituran-live.mjs --strict --deep --parity --use-cases` passes, including the 126 owner questions of `ituran-mcp`'s `docs/USER-PROMPTS.md`. The Comis Gate changes it needs are merged: comisai/comis#3617 and comisai/comis#3630. See `docs/ituran-axi-master-plan.md`.
 
 ## Settings
 

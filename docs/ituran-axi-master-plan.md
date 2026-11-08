@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. Release waits on making the repository public (V1). C1, C2 and C3 are built in Comis and in review: [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |
+| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. Release waits on making the repository public (V1). C1, C2 and C3 are merged into Comis `main` (2026-11-08): [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |
 | Date | 2026-11-08 |
 | Design | `ituran-axi-design.md` |
 | Implementation plan | `ituran-axi-implementation-plan.md` (tasks T1 to T28, test plan) |
@@ -39,7 +39,7 @@ Updated 2026-11-08 from the live runs in `test/live/reports/2026-11-08T*.json`.
 | Comis bundle | **Drafted and tested here** | `comis/`: catalog entry, skill and recipes, wrapper, C1 and C2 drafts; `test/contract/comis-bundle.test.ts` |
 | Not entitled on this account | Known | ITC (`1006`), advanced alerts (403), event types (`1032`), drive-permission groups (`403.2`) |
 | Writes | Not planned for 0.1.0 | No QA account, no authorization (W1) |
-| Comis connector | **In review** | [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal and C2 (D3617). [PR #3630](https://github.com/comisai/comis/pull/3630), stacked on it: C1 (D3630) and the C3 catalog entry, with failure-mode tests and mutation rows. The pack, skill and proofs (C4 to C7) wait on M5. |
+| Comis connector | **C1 to C3 merged** | [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal and C2 (D3617). [PR #3630](https://github.com/comisai/comis/pull/3630): C1 (D3630) and the C3 catalog entry, with failure-mode tests and mutation rows. Both merged on 2026-11-08 at the owner's instruction. The pack, skill and proofs (C4 to C7) wait on M5. |
 
 ## 3. Workstreams
 
@@ -63,7 +63,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M3 | Every read | B | M2 | Contract tests for T14 to T19; live S11 and S12 cover every command (T20) | **Done 2026-11-08** (per-command parity cases remain) |
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
 | M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Ready, waiting on the owner. The package is at 0.1.0, and `.github/workflows/release.yml` publishes with provenance on a `v*` tag; `scripts/check-package.mjs` checks the tarball in CI. The owner's steps: (1) make `comisai/ituran-axi` public (V1); (2) add an npm automation token with publish rights for `ituran-axi` as `NPM_TOKEN` in the repository's `npm` environment; (3) push the tag `v0.1.0`. |
-| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | In review: D3617 in [PR #3617](https://github.com/comisai/comis/pull/3617) and D3630 in [PR #3630](https://github.com/comisai/comis/pull/3630), both with code and tests. Merging is the maintainers' call. |
+| M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | **Done 2026-11-08.** D3617 ([PR #3617](https://github.com/comisai/comis/pull/3617)) and D3630 ([PR #3630](https://github.com/comisai/comis/pull/3630)) are merged, with their code and tests. |
 | M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
 | M9 | Writes and composites | E | M8, W1, Q6 | Phase 3 writes qualified on QA; phase 4 commands each with a parity test | Later |
@@ -90,7 +90,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** V1 → M5, and M6 (the reviews of PRs #3617 and #3630) → M7 → M8. M2 to M4 are done, and C1 to C3 are written, so the Comis review is the longest remaining piece.
+**Critical path, now:** V1 → M5 → M7 (C4 to C7) → M8. M2 to M4 and M6 are done, and C1 to C3 are merged, so the release decision (V1) is what everything else waits on.
 
 ## 6. Schedule
 
