@@ -15,6 +15,10 @@
   "engines": {
     "node": ">=22.18"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/comisai/ituran-axi.git"
+  },
   "scripts": {
     "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/chmod-bin.mjs",
     "typecheck": "tsc -p tsconfig.json",

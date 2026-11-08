@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity`, 14 of 14 stages, 2026-11-08). Release waits on Q5. Comis custody waits on two Gate decisions (C1, C2). |
+| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity`, 14 of 14 stages, 2026-11-08). Release waits on making the repository public (V1). Comis custody waits on two Gate decisions (C1, C2). |
 | Date | 2026-11-08 |
 | Design | `ituran-axi-design.md` |
 | Implementation plan | `ituran-axi-implementation-plan.md` (tasks T1 to T26, test plan) |
@@ -60,7 +60,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M2 | Core reads on the fake | B | M0 | CI green for T1 to T13; live S11 passes for the core commands | **Done 2026-11-08** |
 | M3 | Every read | B | M2 | Contract tests for T14 to T19; live S11 and S12 cover every command (T20) | **Done 2026-11-08** (per-command parity cases remain) |
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
-| M5 | Release 0.1.0 | B | M4, Q5 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Waiting |
+| M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Waiting on V1. The repository `comisai/ituran-axi` was created on 2026-11-08 and is private. |
 | M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | Drafts ready in `comis/decisions.md` |
 | M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
@@ -76,7 +76,7 @@ flowchart LR
   M2 --> M3["M3 Every read"]
   M3 --> M4["M4 Read qualification<br/>live"]
   M4 --> M5["M5 Release 0.1.0"]
-  Q5["Q5 npm and repository owner"]:::decision --> M5
+  V1["V1 repository public<br/>(owner comisai: decided)"]:::decision --> M5
   M1["M1 Ituran's answers<br/>(Q1 credential, Q3 IP, Q4 app id, Q6 QA)"]:::ext --> M6
   M0 --> M6["M6 Comis decisions<br/>C1 password grant, C2 keep 403"]
   M5 --> M7["M7 Comis connector<br/>C1–C7, proofs"]
@@ -88,7 +88,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** Q5 → M5, and M6 (C1 and C2 reviews) → M7 → M8. M2 to M4 are done, so the Comis Gate review is the longest remaining piece.
+**Critical path, now:** V1 → M5, and M6 (C1 and C2 reviews) → M7 → M8. M2 to M4 are done, so the Comis Gate review is the longest remaining piece.
 
 ## 6. Schedule
 
@@ -103,8 +103,8 @@ gantt
   section AXI (done 8 Nov)
   M2-M4 Build and live gate               :done, m2, 2026-11-08, 1d
   section Release
-  Q5 npm and repository owner             :crit, q5, 2026-11-09, 3d
-  M5 Release 0.1.0 (T23-T24)              :crit, m5, after q5, 2d
+  V1 Repository public, npm access        :crit, v1, 2026-11-09, 3d
+  M5 Release 0.1.0 (T23-T24)              :crit, m5, after v1, 2d
   section Comis
   M6 Decisions C1, C2 (review)            :crit, m6, 2026-11-09, 12d
   M7 Connector and proofs                 :crit, m7, after m6, 10d
@@ -114,7 +114,7 @@ gantt
 | Milestone | Target | Holds if |
 | --- | --- | --- |
 | M2, M3, M4 | **Done 8 Nov** | |
-| M5 | 16 Nov | Q5 is decided by 11 November |
+| M5 | 16 Nov | The repository is public (V1), and the release workflow has npm access for `comisai`, by 11 November |
 | M6 | 21 Nov | The Comis maintainers review both decision records together |
 | M7 | about 5 Dec | C1 is the largest piece: a provider entry, the key page's two fields, and failure-mode tests |
 | M8 (owner using it) | about 9 Dec | |
@@ -138,7 +138,8 @@ Send one request:
 
 | ID | Decision | Recommended | Needed by | Decides |
 | --- | --- | --- | --- | --- |
-| Q5 | Who owns the npm package and repository? | The `comisai` organization, publishing from GitHub Actions, as for priority-axi | M5 | Owner |
+| Q5 | Who owns the npm package and repository? | **Decided 2026-11-08:** the `comisai` organization; the repository is `comisai/ituran-axi`, private for now. npm makes signed provenance only for public repositories, and Comis requires it (D335), so the repository must be public before release 0.1.0 (V1). | M5 | Owner (decided) |
+| V1 | Make `comisai/ituran-axi` public for the release | Yes, at M5, after a last check that no account data is in the history | M5 | Owner |
 | C1 | How Comis signs in to Ituran | A Gate password-grant connection (design §12), unless Q1 gives a static key | M6 | Owner and Comis maintainers |
 | C2 | Keep Ituran's 403 instead of "reconnect needed" | A per-service flag, following D360 and D361 | M6 | Comis maintainers |
 | W1 | Allow writes, and where? | Not in 0.1.0. Later, on QA only: places, alerts and groups, up to 5 of each | M9 | Owner |
