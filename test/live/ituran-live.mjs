@@ -33,6 +33,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { AREAS, useCases } from './use-cases.mjs';
 
 const VERSION = '0.1.0';
 // The ituran-mcp release the parity stage compares against.
@@ -106,6 +107,9 @@ ITURAN_USERNAME and ITURAN_PASSWORD, or ITURAN_TOKEN.
                 operational report, diagnostics history, event drill-down
   --parity      S12: run ituran-mcp@${MCP_VERSION} read-only and compare its answers
                 (it signs in once more)
+  --use-cases   S14: answer the 126 questions of ituran-mcp's USER-PROMPTS.md with the
+                built ituran-axi (about 150 commands; read-only)
+  --form-grant  sign in and refresh form-encoded, as the Comis Gate's exchange does
   --no-refresh  skip the refresh-token grant in S4
   --axi         ituran-axi entry for S11 (default dist/bin/ituran-axi.js when built); none skips
   --gate-entry  draft Comis Gate entry for S13 (default comis/key-services/ituran.json)
@@ -144,6 +148,8 @@ try {
       strict: { type: 'boolean' },
       deep: { type: 'boolean' },
       parity: { type: 'boolean' },
+      'use-cases': { type: 'boolean' },
+      'form-grant': { type: 'boolean' },
       'no-refresh': { type: 'boolean' },
       axi: { type: 'string' },
       'gate-entry': { type: 'string' },
@@ -336,8 +342,12 @@ const getAbs = (p, query, o = {}) => call('GET', p, { ...o, query });
 const post = (p, body, query, o = {}) =>
   call('POST', api(p), { ...o, body, query });
 
+// --form-grant sends the account's grants form-encoded, the way the Comis
+// Gate's password exchange sends them; JSON otherwise, as ituran-mcp does.
 function grant(body) {
-  return call('POST', tokenUrl(), { body, timeout: 30_000 });
+  return args['form-grant']
+    ? call('POST', tokenUrl(), { form: body, timeout: 30_000 })
+    : call('POST', tokenUrl(), { body, timeout: 30_000 });
 }
 
 // ---------- reading responses (shapes only) ----------
@@ -688,7 +698,7 @@ await stage('S3', 'sign in', async () => {
     grant_type: 'password',
     username: cfg.user,
     password: cfg.password,
-    device_id: DEVICE_ID,
+    device_id: args['form-grant'] ? 'comis-gate' : DEVICE_ID,
     culture: 'en-US',
   });
   const j = r.json || {};
@@ -753,6 +763,7 @@ await stage('S3', 'sign in', async () => {
     (messageOf(form.json) ?? null) === (messageOf(bogus.json) ?? null);
 
   return c.result(`token in ${r.ms} ms, expires_in ${j.expires_in}`, {
+    grant_encoding: args['form-grant'] ? 'form' : 'json',
     grant_ms: r.ms,
     grant_keys: Object.keys(j),
     token_type: j.token_type ?? null,
@@ -934,11 +945,29 @@ await stage('S6', 'entitlements', async () => {
     };
     if (r.status >= 200 && r.status < 300) ctx.shapes[name] = shape(r.json);
     if (name === 'vehicles') ctx.vehiclesPage1 = r;
-    if (name === 'places' && rows?.length)
+    if (name === 'places' && rows?.length) {
       ctx.firstPlace = rows[0]?.place_id ?? rows[0]?.id ?? null;
+      ctx.placeNames = rows
+        .map((row) => row?.name)
+        .filter((n) => typeof n === 'string');
+    }
+    if (name === 'events_stats' && rows?.length)
+      ctx.openEvent =
+        [...rows].sort(
+          (a, b) => (b?.num_of_vehicles ?? 0) - (a?.num_of_vehicles ?? 0),
+        )[0]?.event_id ?? null;
+    if (name === 'vehicle_groups' && rows?.length) {
+      const top = rows[0];
+      ctx.groupId =
+        top?.child_groups?.[0]?.vehicle_group_id ??
+        top?.vehicle_group_id ??
+        null;
+    }
     if (name === 'event_definitions' && rows?.length)
       ctx.eventDefinitions = rows;
     if (name === 'drivers') ctx.driversPage1 = r;
+    if (name === 'vehicles' && rows?.length)
+      ctx.sampleMake = rows.find((v) => v?.make_name)?.make_name ?? null;
   }
   ctx.probes = table;
   c(
@@ -1084,6 +1113,13 @@ await stage('S9', 'vehicle reads', async () => {
       findPoint(x, path ? `${path}.${k}` : k);
   };
   findPoint(loc.json, '');
+  const at = loc.json?.location?.point;
+  if (
+    typeof at?.lat === 'number' &&
+    typeof at?.lon === 'number' &&
+    (at.lat || at.lon)
+  )
+    ctx.samplePoint = `${at.lat},${at.lon}`;
   facts.location_point_path = pointPath;
   // One read with the realtime blocks: last position with address, driver, and the
   // saved places the vehicle is in. ituran-axi builds `vehicle` and `where` on it.
@@ -1398,6 +1434,46 @@ await stage('S10', 'transport', async () => {
   );
 });
 
+/** Run the built ituran-axi once with this run's token and a private cache. */
+function runAxi(entry, argv, cache) {
+  return new Promise((done) => {
+    const started = performance.now();
+    const child = spawn(process.execPath, [entry, ...argv], {
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        XDG_CACHE_HOME: cache,
+        ITURAN_URL: cfg.base,
+        ITURAN_TOKEN: ctx.token,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), 240_000);
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      done({
+        code,
+        stdout,
+        stderr,
+        ms: Math.round(performance.now() - started),
+      });
+    });
+  });
+}
+
+const axiEntry = () =>
+  args.axi === 'none'
+    ? null
+    : resolve(args.axi || join(ROOT, 'dist/bin/ituran-axi.js'));
+
 // S11: the built ituran-axi against the live API, with the token this run holds.
 await stage('S11', 'AXI smoke', async () => {
   const entry =
@@ -1504,31 +1580,7 @@ await stage('S11', 'AXI smoke', async () => {
   // A private, empty cache: S11 never reuses another run's state.
   const axiCache = mkdtempSync(join(tmpdir(), 'ituran-live-axi-'));
   for (const run of runs) {
-    const out = await new Promise((done) => {
-      const child = spawn(process.execPath, [entry, ...run.argv], {
-        env: {
-          PATH: process.env.PATH,
-          HOME: process.env.HOME,
-          XDG_CACHE_HOME: axiCache,
-          ITURAN_URL: cfg.base,
-          ITURAN_TOKEN: ctx.token,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let stdout = '';
-      let stderr = '';
-      child.stdout.on('data', (d) => {
-        stdout += d;
-      });
-      child.stderr.on('data', (d) => {
-        stderr += d;
-      });
-      const timer = setTimeout(() => child.kill('SIGKILL'), 120_000);
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        done({ code, stdout, stderr });
-      });
-    });
+    const out = await runAxi(entry, run.argv, axiCache);
     const label =
       `ituran-axi ${run.argv.map((a) => (a === p1 ? '<plate>' : a === p1?.slice(0, 4) ? '<plate part>' : a)).join(' ')}`.trim();
     const exits = Array.isArray(run.exit) ? run.exit : [run.exit];
@@ -1808,6 +1860,217 @@ await stage(
   },
   { always: true },
 );
+
+// S14: the use cases. Each question's commands, run with the built AXI.
+const NOT_HERE = /^code: (not_entitled|feature_off|needs_app_id)$/m;
+
+function weekday(date, day) {
+  // The latest date before `date` that falls on `day` (0 Sunday .. 6 Saturday).
+  const t = new Date(`${date}T12:00:00Z`);
+  do t.setUTCDate(t.getUTCDate() - 1);
+  while (t.getUTCDay() !== day);
+  return t.toISOString().slice(0, 10);
+}
+
+function monthBounds(today, back) {
+  const t = new Date(`${today.slice(0, 7)}-01T12:00:00Z`);
+  t.setUTCMonth(t.getUTCMonth() - back);
+  const first = t.toISOString().slice(0, 10);
+  t.setUTCMonth(t.getUTCMonth() + 1);
+  t.setUTCDate(0);
+  return [first, t.toISOString().slice(0, 10)];
+}
+
+await stage('S14', 'use cases', async () => {
+  if (!args['use-cases'])
+    return { status: 'skip', detail: 'run with --use-cases' };
+  const entry = axiEntry();
+  if (!entry || !existsSync(entry))
+    return { status: 'skip', detail: 'ituran-axi is not built yet' };
+  if (!ctx.token) return { status: 'skip', detail: 'no token' };
+  const [P, P2] = ctx.sample;
+  const today = localDate(0);
+  // A whole word of three or more letters or digits from any saved place's
+  // name on the first page: some names have none.
+  const word = (ctx.placeNames ?? [])
+    .flatMap((n) => n.split(/\s+/))
+    .find((w) => /^[\p{L}\p{N}]{3,}$/u.test(w));
+  const [M1, E1] = monthBounds(today, 1);
+  const [M2, E2] = monthBounds(today, 2);
+  const [M3, E3] = monthBounds(today, 3);
+  const v = {
+    P,
+    P2: P2 ?? P,
+    PART: P?.slice(0, 4),
+    TRIP:
+      ctx.firstTrip === null || ctx.firstTrip === undefined
+        ? undefined
+        : String(ctx.firstTrip),
+    PLACE:
+      ctx.firstPlace === null || ctx.firstPlace === undefined
+        ? undefined
+        : String(ctx.firstPlace),
+    PLACEWORD: word,
+    EVENT:
+      ctx.openEvent === null || ctx.openEvent === undefined
+        ? undefined
+        : String(ctx.openEvent),
+    GROUP:
+      ctx.groupId === null || ctx.groupId === undefined
+        ? undefined
+        : String(ctx.groupId),
+    MAKE: ctx.sampleMake ?? undefined,
+    POINT: ctx.samplePoint,
+    Y: localDate(-1),
+    TODAY: today,
+    SAT: weekday(today, 6),
+    WED: weekday(today, 3),
+    D15: localDate(-15),
+    D16: localDate(-16),
+    D30: localDate(-30),
+    D31: localDate(-31),
+    D60: localDate(-60),
+    M1,
+    E1,
+    M2,
+    E2,
+    M3,
+    E3,
+  };
+  const missing = Object.entries(v)
+    .filter(([, x]) => !x)
+    .map(([k]) => k);
+  const cases = useCases(v);
+  // Names for values that identify the account's data, for the report.
+  const names = new Map(
+    [
+      'P',
+      'P2',
+      'PART',
+      'TRIP',
+      'PLACE',
+      'PLACEWORD',
+      'EVENT',
+      'GROUP',
+      'MAKE',
+      'POINT',
+    ]
+      .filter((k) => v[k])
+      .map((k) => [v[k], `<${k}>`]),
+  );
+  const shown = (argv) =>
+    argv
+      .map(
+        (a) =>
+          names.get(a) ??
+          (typeof a === 'string' && P && a.includes(P)
+            ? a.replaceAll(P, '<P>')
+            : a),
+      )
+      .join(' ');
+  const cache = mkdtempSync(join(tmpdir(), 'ituran-live-cases-'));
+  const done = new Map();
+  const outcomes = [];
+  let commands = 0;
+  for (const uc of cases) {
+    const runs = [];
+    for (const argv of uc.runs) {
+      if (argv.some((a) => a === undefined)) {
+        runs.push({
+          argv: shown(argv.map((a) => a ?? '<none>')),
+          state: 'blocked',
+          why: 'no sample value',
+        });
+        continue;
+      }
+      const key = JSON.stringify(argv);
+      let out = done.get(key);
+      if (!out) {
+        await sleep(GAP_MS);
+        out = await runAxi(entry, argv, cache);
+        done.set(key, out);
+        commands++;
+      }
+      const full = argv.includes('--full');
+      const error = /^code: ([a-z_]+)$/m.exec(out.stdout)?.[1];
+      const bounded = full
+        ? Buffer.byteLength(out.stdout) <= 262_144
+        : out.stdout.length <= 4000;
+      const state =
+        out.code === 0 && bounded && out.stderr === ''
+          ? 'pass'
+          : out.code === 1 && NOT_HERE.test(out.stdout)
+            ? 'account'
+            : 'fail';
+      runs.push({
+        argv: shown(argv),
+        state,
+        exit: out.code,
+        ms: out.ms,
+        ...(error ? { error } : {}),
+        ...(state === 'fail' && !bounded
+          ? { why: `output ${out.stdout.length} characters` }
+          : {}),
+        ...(state === 'fail' && error
+          ? {
+              why: scrub(/^message: (.*)$/m.exec(out.stdout)?.[1] ?? '').slice(
+                0,
+                200,
+              ),
+            }
+          : {}),
+      });
+    }
+    const status = runs.some((r) => r.state === 'fail')
+      ? 'fail'
+      : runs.some((r) => r.state === 'blocked')
+        ? 'blocked'
+        : runs.some((r) => r.state === 'account')
+          ? 'not on this account'
+          : 'answered';
+    outcomes.push({
+      n: uc.n,
+      area: AREAS[uc.area],
+      title: uc.title,
+      status,
+      runs,
+    });
+  }
+  const count = (st) => outcomes.filter((o) => o.status === st).length;
+  const failed = outcomes.filter((o) => o.status === 'fail');
+  const blocked = outcomes.filter((o) => o.status === 'blocked');
+  const c = checks();
+  c(
+    'every use case is answered or names a service the account lacks',
+    failed.length === 0,
+    failed
+      .map(
+        (o) =>
+          `${o.n}: ${o.runs
+            .filter((r) => r.state === 'fail')
+            .map(
+              (r) =>
+                `${r.argv} -> ${r.error ?? r.exit}${r.why ? ` (${r.why})` : ''}`,
+            )
+            .join('; ')}`,
+      )
+      .join(' | '),
+  );
+  const r = c.result(
+    `${outcomes.length} use cases, ${commands} commands: ${count('answered')} answered, ${count('not on this account')} not on this account, ${blocked.length} blocked, ${failed.length} failed`,
+    {
+      use_cases_answered: count('answered'),
+      use_cases_not_on_account: count('not on this account'),
+      use_cases_blocked: blocked.length,
+      use_cases_failed: failed.length,
+      use_cases_commands: commands,
+      use_cases_missing_samples: missing,
+      use_cases: outcomes,
+    },
+  );
+  if (r.status === 'pass' && blocked.length) r.status = 'blocked';
+  return r;
+});
 
 // ---------- report ----------
 
