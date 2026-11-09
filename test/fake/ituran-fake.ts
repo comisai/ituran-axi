@@ -39,8 +39,8 @@ export interface FakeState {
 const RLO = String.fromCodePoint(0x202e);
 const NOW = '2026-11-08T12:00:00';
 
-/** The real time now in the account's zone, as Ituran's naive local text. */
-function localNow(): string {
+/** The real time, `ago` milliseconds back, in the account's zone, as Ituran's naive local text. */
+function localNow(ago = 0): string {
   const f = new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Jerusalem',
     year: 'numeric',
@@ -51,7 +51,7 @@ function localNow(): string {
     second: '2-digit',
     hourCycle: 'h23',
   });
-  return f.format(new Date()).replace(' ', 'T');
+  return f.format(new Date(Date.now() - ago)).replace(' ', 'T');
 }
 
 export const PLATES = [
@@ -103,11 +103,9 @@ function realtime(v: Row, i: number, fields: string[]): Row {
       odometer: 1000 * i,
       speed: i % 4 === 0 ? 62 : 0,
       heading: 90,
-      // The last vehicle was last seen two days ago.
-      timestamp:
-        i === VEHICLES.length - 1
-          ? '2026-11-06T11:00:00'
-          : '2026-11-08T11:57:00',
+      // Positions follow the real clock, so their ages do not drift as days
+      // pass: the last vehicle was seen two days ago, the others 3 minutes ago.
+      timestamp: localNow(i === VEHICLES.length - 1 ? 2 * 86_400_000 : 180_000),
     };
   }
   if (fields.includes('Driver') && i % 2 === 0) {
