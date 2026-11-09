@@ -1,6 +1,7 @@
 # ituran-axi
 
 [![CI](https://github.com/comisai/ituran-axi/actions/workflows/ci.yml/badge.svg)](https://github.com/comisai/ituran-axi/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/ituran-axi.svg)](https://www.npmjs.com/package/ituran-axi)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A read-only command-line tool that lets AI agents read Ituran vehicle tracking: vehicles and their positions, trips, drivers, saved places, events, alerts, sensor readings, reports and safety grades.
@@ -13,7 +14,7 @@ ituran-axi is an AXI, an [agent experience interface](https://axi.md). Every com
 
 It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents that have a shell: 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It was built to run inside Comis, behind the Comis Gate, and it also works on its own.
 
-> **Status:** early development (0.x). Every command is tested end to end against the production Ituran API. Release 0.1.0 to npm is in preparation.
+> **Status:** early development (0.x). Every command is tested end to end against the production Ituran API.
 
 ## Requirements
 
@@ -22,15 +23,11 @@ It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents 
 
 ## Install
 
-Until 0.1.0 is on npm, install from source:
-
 ```sh
-git clone https://github.com/comisai/ituran-axi.git
-cd ituran-axi
-npm ci && npm run build && npm link
+npm install -g ituran-axi
 ```
 
-After the release, use `npm install -g ituran-axi`. Releases are published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so you can check that a package was built from this repository.
+Each release is published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so you can check that it was built from this repository. To run from source instead, see [Development](#development).
 
 ## Configure
 
@@ -90,7 +87,7 @@ code: not_found
 usage: "ituran-axi vehicle <plate> [--full]"
 ```
 
-[`comis/skills/ituran/recipes.md`](comis/skills/ituran/recipes.md) has tested shell combinations for common fleet questions.
+[`docs/recipes.md`](docs/recipes.md) has tested shell combinations for common questions about the vehicles.
 
 ### Ituran's own rules
 
@@ -126,15 +123,17 @@ ituran-axi handles these, and says so in its output where it matters:
 
 ## Comis
 
-[`comis/`](comis/README.md) holds the Comis connector bundle: the Gate catalog entry, the `ituran` agent skill and its recipes, and the pack wrapper. Inside Comis, the Gate signs in to Ituran and holds the token. The agent's workbench never sees the password or the token.
+Comis ships `ituran-axi` in its `apps` pack, with the `ituran-read` skill and the `ituran` Gate service in its own repository. Inside Comis, the Gate signs in to Ituran and holds the token, and the agent's workbench never sees the password or the token. [`test/fixtures/comis-ituran-entry.json`](test/fixtures/comis-ituran-entry.json) is a copy of that Gate service; `test/contract/gate-entry.test.ts` checks that every request the AXI sends gets the token as a read, and that sign-in, device commands and writes are denied.
 
 ## Development
 
 ```sh
+git clone https://github.com/comisai/ituran-axi.git && cd ituran-axi
 npm ci
 npm run check       # type-check, lint, unit and contract tests against a fake Ituran
 npm run build       # dist/bin/ituran-axi.js
 npm run test:dist   # contract and AXI-principle tests against the built CLI
+npm link            # optional: put this build on your PATH as ituran-axi
 ```
 
 The live tests against the real Ituran API are opt-in, read-only, and need your own account; see [CONTRIBUTING.md](CONTRIBUTING.md#live-tests). The design and plans are in [`docs/`](docs/ituran-axi-design.md).
