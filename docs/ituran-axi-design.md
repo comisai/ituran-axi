@@ -540,7 +540,7 @@ A reference file next to the skill holds the recipes (§5.1).
 
 ## 11. Packaging
 
-- **Repository.** Its own public repository with the MIT licence. The owner is decided under master plan Q5. `ituran-mcp` lives at `ituranlabs/ituran-mcp`, and `priority-axi` at `comisai/priority-axi`.
+- **Repository.** Its own public repository, [comisai/ituran-axi](https://github.com/comisai/ituran-axi), with the MIT licence (master plan Q5). `ituran-mcp` lives at `ituranlabs/ituran-mcp`, and `priority-axi` at `comisai/priority-axi`.
 - **Dependencies:**
   - Runtime: only `@toon-format/toon` 4.4.0, pinned exactly.
   - Development: `typescript`, `@biomejs/biome` and `@types/node`, as in priority-axi.
@@ -608,11 +608,11 @@ Nothing touches the Hub. The chief of staff's prompt is unchanged.
   - The live reports keep shapes and counts only, and are gitignored.
 - **IP blocking (474).** Grants stay rare: a token cache outside Comis, and the Gate's single connection inside it.
 - **Upstream drift.** Ituran has changed binders silently before: `wildcard_filter` started binding, and ITC began requiring `to_date`. The live test is the referee. Run it weekly, and after any change Ituran announces.
-- **The password was shared in plain text in a chat session.** It is kept only in the gitignored `test/live/.env.prod`. Rotate it after phase 1, and give Comis its own service account.
+- **Credentials.** The live test's password is kept only in a gitignored env file, never in the repository. Rotate it after phase 1, and give Comis its own service account.
 
 ## 16. References
 
-**Comis** (`/Users/mosheanconina/Projects/comisai/comis`, `main` at `f00810ca3b`):
+**Comis** (the `comisai/comis` repository, `main` at `f00810ca3b`):
 - `AGENTS.md`: §2, §4 (no nautical terms), §6
 - `docs/Comis v2 Design and Implementation.md`:
   - §2 (the AXI definition)
@@ -626,8 +626,8 @@ Nothing touches the Hub. The chief of staff's prompt is unchanged.
 - `packages/gate/src/comis_gate/proxy.py` (401 and 403 become 502)
 - `catalog/key-services.json` (`reads` in `exa`, `notion`, `17track` and `ticktick`)
 
-**priority-axi** (`/Users/mosheanconina/Projects/temp/priority-axi`): its design, plans, live test, runtime (`src/cli`, `src/output`, `src/errors.ts`) and Comis bundle (`comis/`).
+**priority-axi** ([comisai/priority-axi](https://github.com/comisai/priority-axi)): its design, plans, live test, runtime (`src/cli`, `src/output`, `src/errors.ts`) and Comis bundle (`comis/`).
 
-**ituran-mcp** (`/Users/mosheanconina/Projects/comisai_old/ituran-mcp`, 4.2.0): `README.md`, `TOOLS.md`, `CLAUDE.md` (verified upstream facts and gotchas), `src/token-manager.ts`, `src/ituran-client.ts`, `src/dates.ts`, `src/report-paging.ts`, `docs/upstream/*` (vendored swaggers).
+**ituran-mcp** ([ituranlabs/ituran-mcp](https://github.com/ituranlabs/ituran-mcp), 4.2.0): `README.md`, `TOOLS.md`, `CLAUDE.md` (verified upstream facts and gotchas), `src/token-manager.ts`, `src/ituran-client.ts`, `src/dates.ts`, `src/report-paging.ts`, `docs/upstream/*` (vendored swaggers).
 
 **AXI:** https://axi.md, the ten principles, read 2026-11-08.

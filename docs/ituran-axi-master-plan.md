@@ -2,8 +2,8 @@
 
 | | |
 | --- | --- |
-| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. Release waits on making the repository public (V1). C1, C2 and C3 are merged into Comis `main` (2026-11-08): [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |
-| Date | 2026-11-08 |
+| Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. The repository is public since 2026-11-09 (V1); release 0.1.0 waits on the npm token and the tag (M5). C1, C2 and C3 are merged into Comis `main` (2026-11-08): [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |
+| Date | 2026-11-09 |
 | Design | `ituran-axi-design.md` |
 | Implementation plan | `ituran-axi-implementation-plan.md` (tasks T1 to T28, test plan) |
 | Live test | `test/live/ituran-live.mjs`; reports in `test/live/reports/` (gitignored) |
@@ -62,7 +62,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M2 | Core reads on the fake | B | M0 | CI green for T1 to T13; live S11 passes for the core commands | **Done 2026-11-08** |
 | M3 | Every read | B | M2 | Contract tests for T14 to T19; live S11 and S12 cover every command (T20) | **Done 2026-11-08** (per-command parity cases remain) |
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
-| M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Ready, waiting on the owner. The package is at 0.1.0, and `.github/workflows/release.yml` publishes with provenance on a `v*` tag; `scripts/check-package.mjs` checks the tarball in CI. The owner's steps: (1) make `comisai/ituran-axi` public (V1); (2) add an npm automation token with publish rights for `ituran-axi` as `NPM_TOKEN` in the repository's `npm` environment; (3) push the tag `v0.1.0`. |
+| M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | Ready, waiting on the owner. The package is at 0.1.0, and `.github/workflows/release.yml` publishes with provenance on a `v*` tag; `scripts/check-package.mjs` checks the tarball in CI. The repository is public (V1, done 2026-11-09). The owner's remaining steps: (1) add an npm automation token with publish rights for `ituran-axi` as `NPM_TOKEN` in the repository's `npm` environment; (2) push the tag `v0.1.0`. |
 | M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | **Done 2026-11-08.** D3617 ([PR #3617](https://github.com/comisai/comis/pull/3617)) and D3630 ([PR #3630](https://github.com/comisai/comis/pull/3630)) are merged, with their code and tests. |
 | M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
@@ -78,7 +78,7 @@ flowchart LR
   M2 --> M3["M3 Every read"]
   M3 --> M4["M4 Read qualification<br/>live"]
   M4 --> M5["M5 Release 0.1.0"]
-  V1["V1 repository public<br/>(owner comisai: decided)"]:::decision --> M5
+  V1["V1 repository public<br/>done 2026-11-09"]:::decision --> M5
   M1["M1 Ituran's answers<br/>(Q1 credential, Q3 IP, Q4 app id, Q6 QA)"]:::ext --> M6
   M0 --> M6["M6 Comis decisions<br/>C1 password grant, C2 keep 403"]
   M5 --> M7["M7 Comis connector<br/>C1–C7, proofs"]
@@ -90,7 +90,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** V1 → M5 → M7 (C4 to C7) → M8. M2 to M4 and M6 are done, and C1 to C3 are merged, so the release decision (V1) is what everything else waits on.
+**Critical path, now:** M5 → M7 (C4 to C7) → M8. M2 to M4, M6 and V1 are done, and C1 to C3 are merged, so the release (M5: the npm token and the `v0.1.0` tag) is what everything else waits on.
 
 ## 6. Schedule
 
@@ -127,7 +127,7 @@ gantt
 Send one request:
 
 1. **A credential that is not a password (Q1).** Can Ituran issue an API key, a long-lived token or client credentials for the account's API use? If yes, Comis keeps a static key and needs no Gate sign-in code.
-2. **A dedicated service account.** The account Comis uses should be its own, without two-step sign-in, with only the read permissions the owner wants to share. It should not be the one used in this chat session (§10, K8).
+2. **A dedicated service account.** The account Comis uses should be its own, without two-step sign-in, with only the read permissions the owner wants to share. It should not be the account used during development (§10, K8).
 3. **IP allowlisting (Q3).** The Comis host signs in about once a day. Ask Ituran to allowlist its egress IP with the access protection (Link11), and to say what grant rate triggers HTTP 474.
 4. **An app id (Q4).** Event types answer `1032` without one. Ask whether a dedicated app registration for `ituran-axi` exists or can be made.
 5. **A QA account (Q6).** For any future write qualification, with VPN access if QA still requires it.
@@ -140,8 +140,8 @@ Send one request:
 
 | ID | Decision | Recommended | Needed by | Decides |
 | --- | --- | --- | --- | --- |
-| Q5 | Who owns the npm package and repository? | **Decided 2026-11-08:** the `comisai` organization; the repository is `comisai/ituran-axi`, private for now. npm makes signed provenance only for public repositories, and Comis requires it (D335), so the repository must be public before release 0.1.0 (V1). | M5 | Owner (decided) |
-| V1 | Make `comisai/ituran-axi` public for the release | Yes, at M5, after a last check that no account data is in the history | M5 | Owner |
+| Q5 | Who owns the npm package and repository? | **Decided 2026-11-08:** the `comisai` organization; the repository is `comisai/ituran-axi`. npm makes signed provenance only for public repositories, and Comis requires it (D335), so the repository is public (V1). | M5 | Owner (decided) |
+| V1 | Make `comisai/ituran-axi` public for the release | **Done 2026-11-09**, after a check that no credentials or account data are in the history. `main` is protected. | M5 | Owner (decided) |
 | C1 | How Comis signs in to Ituran | A Gate password-grant connection (design §12), unless Q1 gives a static key | M6 | Owner and Comis maintainers |
 | C2 | Keep Ituran's 403 instead of "reconnect needed" | A per-service flag, following D360 and D361 | M6 | Comis maintainers |
 | W1 | Allow writes, and where? | Not in 0.1.0. Later, on QA only: places, alerts and groups, up to 5 of each | M9 | Owner |
@@ -178,7 +178,7 @@ Send one request:
 | K5 | The AXI's composites fall short of `ituran-mcp`'s reports for real questions | Medium | Medium | Skill recipes; phase 4 brings back commands by measured demand, each with a parity test | Developer |
 | K6 | Qualification only on production | Certain today | Medium | Read-only by construction; QA account requested (Q6) before any write | Owner |
 | K7 | Slow upstream routes (places 2 to over 60 s) exceed the agent's time | Medium | Low | Deadline-bounded requests, a warning first, and Q7's local computation | Developer |
-| K8 | The production password was shared in plain text in a chat session | Already happened | Medium | Kept only in the gitignored `test/live/.env.prod` (mode 0600). Rotate it after M4. Comis gets its own service account (§7). | Owner |
+| K8 | The production password was handled outside a secret store during development | Already happened | Medium | Kept only in the gitignored `test/live/.env.prod` (mode 0600). Rotate it after M4. Comis gets its own service account (§7). | Owner |
 | K9 | Two AXIs, priority-axi and ituran-axi, land in the `apps` pack's provenance check at once | Medium | Low | One shared change (C5), whichever lands first | Developer |
 
 ## 11. Files
@@ -196,5 +196,5 @@ Send one request:
 | `comis/decisions.md` | Drafts of the C1 (Gate password grant) and C2 (keep Ituran's 403) decision records |
 | `src/` | The AXI: command table, sign-in and token cache, read-only HTTP, pacing, time windows, commands |
 | `test/fake/ituran-fake.ts` | The fake Ituran, following the live facts |
-| `test/unit`, `test/contract`, `test/axi` | 57 tests: modules, the binary against the fake, the Comis bundle, the ten AXI principles |
+| `test/unit`, `test/contract`, `test/axi` | 62 tests: modules, the binary against the fake, the Comis bundle, the ten AXI principles |
 | `test/live/reports/*.json` | Reports from each run (gitignored) |

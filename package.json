@@ -1,7 +1,7 @@
 {
   "name": "ituran-axi",
   "version": "0.1.0",
-  "description": "AXI command-line tool over the Ituran vehicle tracking API",
+  "description": "A read-only command-line tool that lets AI agents read Ituran vehicle tracking",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -20,6 +20,20 @@
     "type": "git",
     "url": "git+https://github.com/comisai/ituran-axi.git"
   },
+  "homepage": "https://github.com/comisai/ituran-axi#readme",
+  "bugs": {
+    "url": "https://github.com/comisai/ituran-axi/issues"
+  },
+  "keywords": [
+    "ituran",
+    "fleet",
+    "vehicle-tracking",
+    "telematics",
+    "cli",
+    "ai-agents",
+    "axi",
+    "toon"
+  ],
   "scripts": {
     "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/chmod-bin.mjs",
     "typecheck": "tsc -p tsconfig.json",

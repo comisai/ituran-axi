@@ -1,0 +1,21 @@
+name: Feature request
+description: A new command, flag or behaviour.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The question you are trying to answer about your fleet, and why the current commands do not cover it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The command, flags and output you have in mind, if any.
+  - type: textarea
+    id: ituran
+    attributes:
+      label: Ituran API details
+      description: The Ituran API routes or fields involved, with links to Ituran's documentation if relevant. ituran-axi only reads, so requests for writes or device commands are out of scope.

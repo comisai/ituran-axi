@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | M2, M3 and M4 done on 2026-11-08. Every read command is built, tested (62 tests) and passes the live gate on production, including the owner's 126 questions (S14). Release waits on V1; Comis custody waits on the C1 and C2 reviews (master plan §8). |
+| Status | M2, M3 and M4 done on 2026-11-08. Every read command is built, tested (62 tests) and passes the live gate on production, including the owner's 126 questions (S14). The repository is public (V1); release 0.1.0 waits on the npm token and the tag (M5). C1 to C3 are merged into Comis. |
 | Date | 2026-11-08 |
 | Design | `ituran-axi-design.md` |
 | Master plan | `ituran-axi-master-plan.md` |
@@ -191,7 +191,7 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 | T21 (M4) | **Done** | `ituran-live --strict --deep --parity --use-cases`: S1 to S14 pass. The reports are in `test/live/reports/`. |
 | T22 | **Done** | `README.md`, `NOTICE` with the port credit, and `--help` reviewed (overview under 2,000 characters, each command under 1,500) |
 | T23 | **Done** | `.github/workflows/release.yml` publishes on a `v*` tag with `npm publish --provenance`, after the full check and `scripts/check-package.mjs`. It refuses while the repository is private. The version is 0.1.0. |
-| T24 (M5) | Waiting | The owner makes the repository public (V1) and adds `NPM_TOKEN`; then tag `v0.1.0` and rerun the live test against the published package. |
+| T24 (M5) | Waiting | The repository is public (V1). The owner adds `NPM_TOKEN`; then tag `v0.1.0` and rerun the live test against the published package. |
 | T25 | **Done** | `comis/`: catalog entry, skill and recipes (each recipe run live), wrapper, README. Checked by `test/contract/comis-bundle.test.ts`. |
 | T26 | **Done** | `comis/decisions.md`: the C1 and C2 drafts with their failure-mode tests |
 | T27 | **Done** | Commands for the owner's questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`: `where --near/--within`, `centers`, `diagnostics --all`, `safety groups`, `safety periodic --by day|month`, trip start and end coordinates, and vehicle make and year. Each has contract tests. |
