@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "npm provenance needs a public repository; make comisai/ituran-axi public first (master plan V1)."
           exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
