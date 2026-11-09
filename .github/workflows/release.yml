@@ -20,7 +20,7 @@ jobs:
           echo "npm provenance needs a public repository; make comisai/ituran-axi public first (master plan V1)."
           exit 1
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
