@@ -36,11 +36,11 @@ Updated 2026-11-08 from the live runs in `test/live/reports/2026-11-08T*.json`.
 | Live AXI qualification | **Done** | S11: 26 runs of the built AXI on production; S12 parity; S13 Gate rules |
 | Owner questions (`USER-PROMPTS.md`) | **Done** | S14: 126 questions, 124 commands. 117 answered, and 9 name ITC, which this account lacks. The first runs found F18 to F20. |
 | Gate sign-in wire (C1) | **Done** | `--form-grant`: production accepts the grant as the Gate sends it (F21) |
-| Comis bundle | **Drafted and tested here** | `comis/`: catalog entry, skill and recipes, wrapper, C1 and C2 drafts; `test/contract/comis-bundle.test.ts` |
+| Comis bundle | **Moved to Comis** | The skill (`ituran-read`), wrapper and recipes ship in Comis's apps pack ([PR #3683](https://github.com/comisai/comis/pull/3683)). Here, `test/fixtures/comis-ituran-entry.json` keeps a copy of the Gate service for `test/contract/gate-entry.test.ts` and live S13, and `docs/recipes.md` keeps the recipes. |
 | Not entitled on this account | Known | ITC (`1006`), advanced alerts (403), event types (`1032`), drive-permission groups (`403.2`) |
 | Release 0.1.0 on npm | **Done** | `ituran-axi@0.1.0` with SLSA provenance; the live gate passes on the published package (2026-11-09) |
 | Writes | Not planned for 0.1.0 | No QA account, no authorization (W1) |
-| Comis connector | **C1 to C3 merged** | [PR #3617](https://github.com/comisai/comis/pull/3617): the proposal and C2 (D3617). [PR #3630](https://github.com/comisai/comis/pull/3630): C1 (D3630) and the C3 catalog entry, with failure-mode tests and mutation rows. Both merged on 2026-11-08 at the owner's instruction. The pack, skill and proofs (C4 to C7) are next, now that M5 is done. |
+| Comis connector | **C1 to C7 merged** | [PR #3617](https://github.com/comisai/comis/pull/3617): C2 (D3617). [PR #3630](https://github.com/comisai/comis/pull/3630): C1 (D3630) and the C3 catalog entry. [PR #3683](https://github.com/comisai/comis/pull/3683): C4 to C7, the apps pack, `ituran-read`, harness cells and the `ituran-campaign` live scenario (D3683). |
 
 ## 3. Workstreams
 
@@ -65,8 +65,8 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
 | M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | **Done 2026-11-09.** `v0.1.0` was published by `.github/workflows/release.yml` with signed SLSA provenance from commit `4e26148`; `npm audit signatures` verifies it. The live gate on the installed package (`--strict --deep --use-cases`, token mode) passed: 13 pass, 0 fail, 0 blocked; S14 answered 117 of 126 questions, and 9 name ITC, which this account lacks. S3 and S12 are skipped in token mode. |
 | M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | **Done 2026-11-08.** D3617 ([PR #3617](https://github.com/comisai/comis/pull/3617)) and D3630 ([PR #3630](https://github.com/comisai/comis/pull/3630)) are merged, with their code and tests. |
-| M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | Waiting |
-| M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | Waiting |
+| M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | **Done 2026-11-09.** [PR #3683](https://github.com/comisai/comis/pull/3683) merged after `pnpm gate` and the live campaign. The secret-free self-driving stage with a fake Ituran stays deferred: the Gate's exchange cannot reach a fixture on a private address. The `apps-local` and `apps-payload` stages cover the same reads at component level. |
+| M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | **Done on a test stack 2026-11-09.** The `ituran-campaign` run answered the owner's Hebrew status question, a follow-up and a refused engine stop from the real account (Comis `docs/ituran-live-test.md`). Connect ran on the host; connecting from chat is still to do on the owner's own install. |
 | M9 | Writes and composites | E | M8, W1, Q6 | Phase 3 writes qualified on QA; phase 4 commands each with a parity test | Later |
 
 **Q1 can shorten the critical path.** If Ituran can issue a long-lived API key, C1 becomes a static key. That is a catalog entry with no Gate sign-in code, and M6 shrinks to C2 alone.
@@ -82,7 +82,7 @@ flowchart LR
   V1["V1 repository public<br/>done 2026-11-09"]:::decision --> M5
   M1["M1 Ituran's answers<br/>(Q1 credential, Q3 IP, Q4 app id, Q6 QA)"]:::ext --> M6
   M0 --> M6["M6 Comis decisions<br/>C1 password grant, C2 keep 403"]
-  M5 --> M7["M7 Comis connector<br/>C1–C7, proofs"]
+  M5 --> M7["M7 Comis connector<br/>C1–C7, done 2026-11-09"]
   M6 --> M7
   M7 --> M8["M8 Owner uses it"]
   M8 --> M9["M9 Writes (QA) and composites"]
@@ -91,7 +91,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** M7 (C4 to C7) → M8. M2 to M6 and V1 are done, and C1 to C3 are merged, so the Comis pack, skill, proofs and docs are what remains.
+**Critical path, now:** M8 on the owner's own install. M2 to M7 and V1 are done; what remains is connecting from chat on the owner's Comis, and the deferred fake-Ituran stage.
 
 ## 6. Schedule
 
@@ -119,8 +119,8 @@ gantt
 | M2, M3, M4 | **Done 8 Nov** | |
 | M5 | **Done 9 Nov** | |
 | M6 | 21 Nov | The Comis maintainers review both decision records together |
-| M7 | about 5 Dec | C1 and C3 are written (PR #3630). What remains is the pack, skill and proofs (C4 to C7) |
-| M8 (owner using it) | about 9 Dec | |
+| M7 | **Done 9 Nov** | |
+| M8 (owner using it) | On the owner's install | Done on a test stack 9 Nov |
 | M9 | Q1 2027 | A QA account exists (Q6) |
 
 ## 7. Owner actions: what to ask Ituran
@@ -192,11 +192,9 @@ Send one request:
 | `docs/ituran-axi-master-plan.md` | When and who: milestones, gates, schedule, decisions, risks |
 | `test/live/ituran-live.mjs` | The live test: read-only by construction, no dependencies |
 | `test/live/.env.example` | Settings template. Copy it to `.env.prod`, which is gitignored. |
-| `comis/key-services/ituran.json` | The draft Gate entry, checked by live S13 and by `test/contract/comis-bundle.test.ts` |
-| `comis/skills/ituran/` | The read skill and its recipes |
-| `comis/bin/ituran-axi`, `comis/README.md` | The pack wrapper; how the bundle lands in Comis |
-| `comis/decisions.md` | Drafts of the C1 (Gate password grant) and C2 (keep Ituran's 403) decision records |
+| `test/fixtures/comis-ituran-entry.json` | A copy of the Comis Gate's `ituran` service, checked by live S13 and by `test/contract/gate-entry.test.ts` |
+| `docs/recipes.md` | Tested shell combinations for common questions |
 | `src/` | The AXI: command table, sign-in and token cache, read-only HTTP, pacing, time windows, commands |
 | `test/fake/ituran-fake.ts` | The fake Ituran, following the live facts |
-| `test/unit`, `test/contract`, `test/axi` | 62 tests: modules, the binary against the fake, the Comis bundle, the ten AXI principles |
+| `test/unit`, `test/contract`, `test/axi` | 61 tests: modules, the binary against the fake, the Gate entry contract, the recipes, the ten AXI principles |
 | `test/live/reports/*.json` | Reports from each run (gitignored) |
