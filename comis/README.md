@@ -1,6 +1,6 @@
 # Comis connector bundle
 
-This folder holds everything the Comis repository needs to connect Ituran through `ituran-axi`. It lives here, tested against the real AXI, until `ituran-axi` is published to npm (master plan M5). The Comis changes cannot land before that: a pack installs AXIs only from its npm lock, with provenance checked (D335).
+This folder holds everything the Comis repository needs to connect Ituran through `ituran-axi`, tested here against the real AXI. `ituran-axi` 0.1.0 is on npm with signed provenance (master plan M5), which the Comis pack requires: it installs AXIs only from its npm lock, with provenance checked (D335).
 
 | File | Comis change | Goes to, in the Comis repository |
 | --- | --- | --- |
