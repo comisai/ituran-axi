@@ -103,8 +103,8 @@ ituran-axi/
   package.json                  bin ituran-axi; type module; engines node >=22.18
   tsconfig*.json, biome.json    as priority-axi
   docs/                         design, implementation plan, master plan
-  comis/
-    key-services/ituran.json    the draft Gate entry (live S13 checks it)
+  test/fixtures/
+    comis-ituran-entry.json     a copy of the Comis Gate's ituran service (live S13 checks it)
   src/
     bin/ituran-axi.ts           argv -> command -> exit code (0 ok, 1 error, 2 usage)
     cli/table.ts                the one command table: args, flags, summaries
@@ -192,8 +192,8 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 | T22 | **Done** | `README.md`, `NOTICE` with the port credit, and `--help` reviewed (overview under 2,000 characters, each command under 1,500) |
 | T23 | **Done** | `.github/workflows/release.yml` publishes on a `v*` tag with `npm publish --provenance`, after the full check and `scripts/check-package.mjs`. It refuses while the repository is private. The version is 0.1.0. |
 | T24 (M5) | **Done** | `v0.1.0` tagged and published with provenance on 2026-11-09. The live gate on the installed npm package (`--strict --deep --use-cases`, token mode) passed: 13 pass, 0 fail, 0 blocked; S14 117 answered, 9 ITC not on this account. |
-| T25 | **Done** | `comis/`: catalog entry, skill and recipes (each recipe run live), wrapper, README. Checked by `test/contract/comis-bundle.test.ts`. |
-| T26 | **Done** | `comis/decisions.md`: the C1 and C2 drafts with their failure-mode tests |
+| T25 | **Done** | The Comis bundle (catalog entry, skill and recipes, wrapper) moved into the Comis repository with the apps pack. Here, `test/fixtures/comis-ituran-entry.json` and `test/contract/gate-entry.test.ts` keep the Gate contract, and `docs/recipes.md` keeps the recipes. |
+| T26 | **Done** | The C1 and C2 decision records are D3630 and D3617 in the Comis repository. |
 | T27 | **Done** | Commands for the owner's questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`: `where --near/--within`, `centers`, `diagnostics --all`, `safety groups`, `safety periodic --by day|month`, trip start and end coordinates, and vehicle make and year. Each has contract tests. |
 | T28 | **Done** | S14 (`--use-cases`) runs the 126 questions in `USER-PROMPTS.md` as AXI commands on production. Its first runs found F18 to F20. |
 
@@ -275,7 +275,7 @@ Sizes are working days for one developer. "Live" says whether the task needs the
 | S10 transport | Latency, statuses, compression, limit headers, large integers, Hebrew text, date forms | 481, 474, 429; F2 |
 | S11 AXI smoke | The built `ituran-axi` with this run's token: exit codes, TOON, the 4,000-character bound | The shipped binary |
 | S12 parity (`--parity`) | `ituran-mcp@4.2.0` read-only agrees with the direct reads | The conversion |
-| S13 Gate rules | Every route the run made, judged by `comis/key-services/ituran.json` | C3, R2, R5 |
+| S13 Gate rules | Every route the run made, judged by `test/fixtures/comis-ituran-entry.json` | C3, R2, R5 |
 | S14 use cases (`--use-cases`) | The 126 owner questions in `ituran-mcp`'s `docs/USER-PROMPTS.md`, each run as the AXI commands that answer it, filled in from this account's own plates, trips, places, events and groups. Each must answer, or name a service the account lacks. | The command set against real questions; F18 to F20 |
 
 **Safety rules, built into the code:**

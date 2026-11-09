@@ -112,7 +112,7 @@ ITURAN_USERNAME and ITURAN_PASSWORD, or ITURAN_TOKEN.
   --form-grant  sign in and refresh form-encoded, as the Comis Gate's exchange does
   --no-refresh  skip the refresh-token grant in S4
   --axi         ituran-axi entry for S11 (default dist/bin/ituran-axi.js when built); none skips
-  --gate-entry  draft Comis Gate entry for S13 (default comis/key-services/ituran.json)
+  --gate-entry  Comis Gate entry for S13 (default test/fixtures/comis-ituran-entry.json)
   --report      JSON report path (default test/live/reports/<time>.json)
 exit: 0 no failures, 1 failures (or blocked with --strict), 2 usage`;
 
@@ -1733,7 +1733,7 @@ await stage(
   'Gate rules',
   async () => {
     const file = resolve(
-      args['gate-entry'] || join(ROOT, 'comis/key-services/ituran.json'),
+      args['gate-entry'] || join(ROOT, 'test/fixtures/comis-ituran-entry.json'),
     );
     if (!existsSync(file))
       return { status: 'skip', detail: 'no draft Gate entry' };

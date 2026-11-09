@@ -1,13 +1,14 @@
-// The Comis bundle against the AXI itself: every request ituran-axi sends
-// must get the token from the draft Gate entry and pass as a read, and the
-// identity routes, device commands and writes must be denied. The matcher
+// The Comis Gate's ituran entry against the AXI itself: every request
+// ituran-axi sends must get the token and pass as a read, and the identity
+// routes, device commands and writes must be denied. The fixture is a copy of
+// the ituran entry in Comis's catalog/key-services.json; update it when either
+// side changes. The matcher
 // follows the Gate's rules: paths only, {name} matches one segment of
 // [A-Za-z0-9._~-]+, {a|b} matches one listed literal, {name...} the rest.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, describe, it } from 'node:test';
-import { COMMANDS } from '../../src/cli/run.ts';
 import { startFake } from '../fake/ituran-fake.ts';
 import { fakeEnv, runBinary } from '../helpers.ts';
 
@@ -21,7 +22,7 @@ interface Entry {
 
 const entry = JSON.parse(
   readFileSync(
-    new URL('../../comis/key-services/ituran.json', import.meta.url),
+    new URL('../fixtures/comis-ituran-entry.json', import.meta.url),
     'utf8',
   ),
 ) as Entry;
@@ -81,7 +82,7 @@ before(async () => {
 });
 after(() => fake.close());
 
-describe('Comis bundle', () => {
+describe('Comis Gate entry', () => {
   it('names the service the way the Gate and the skill expect', () => {
     assert.deepEqual(entry.hosts, ['api.ituran.com']);
     assert.equal(entry.credential.inject, 'bearer');
@@ -191,53 +192,5 @@ describe('Comis bundle', () => {
     ]) {
       assert.equal(judge('GET', path).credentialed, false, path);
     }
-  });
-  it('ships a skill with flat metadata that names only real commands', () => {
-    const skill = readFileSync(
-      new URL('../../comis/skills/ituran/SKILL.md', import.meta.url),
-      'utf8',
-    );
-    const recipes = readFileSync(
-      new URL('../../comis/skills/ituran/recipes.md', import.meta.url),
-      'utf8',
-    );
-    const front = /^---\n([\s\S]*?)\n---\n/.exec(skill)?.[1] ?? '';
-    assert.match(front, /^name: ituran$/m);
-    for (const key of [
-      'comis.roles',
-      'comis.pack',
-      'comis.requires.bins',
-      'comis.requires.env',
-      'comis.requires.services',
-    ]) {
-      assert.match(
-        front,
-        new RegExp(`^ {2}${key.replace(/\./g, '\\.')}: "[^"\n]+"$`, 'm'),
-        key,
-      );
-    }
-    assert.match(front, /comis\.requires\.env: "ITURAN_TOKEN"/);
-    const names = new Set(COMMANDS.map((c) => c.name));
-    for (const text of [skill, recipes]) {
-      for (const m of text.matchAll(/(?:`|^)ituran-axi ([a-z][a-z-]*)/gm))
-        assert.ok(names.has(m[1] as string), `unknown command ${m[1]}`);
-    }
-    assert.doesNotMatch(skill, /\bfleet\b/i, 'Comis forbids nautical words');
-  });
-
-  it('ships a wrapper that uses the Gate and the published bin', () => {
-    const wrapper = readFileSync(
-      new URL('../../comis/bin/ituran-axi', import.meta.url),
-      'utf8',
-    );
-    assert.match(wrapper, /^export NODE_USE_ENV_PROXY=1$/m);
-    assert.match(
-      wrapper,
-      /^export ITURAN_URL=https:\/\/api\.ituran\.com\/api\/v2$/m,
-    );
-    assert.match(
-      wrapper,
-      /node_modules\/ituran-axi\/dist\/bin\/ituran-axi\.js/,
-    );
   });
 });

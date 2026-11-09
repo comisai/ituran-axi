@@ -38,8 +38,8 @@ npm run test:dist   # contract and AXI-principle tests against the built CLI
 | `test/axi/` | The ten AXI principles, checked against the CLI |
 | `test/fake/` | The fake Ituran server the tests use |
 | `test/live/` | Opt-in, read-only checks against the real Ituran API |
-| `comis/` | The Comis connector bundle: catalog entry, skill and recipes, wrapper |
-| `docs/` | Design, implementation plan and master plan |
+| `test/fixtures/` | A copy of the Comis Gate's `ituran` service, which the contract and live tests check the AXI's requests against |
+| `docs/` | Design, implementation plan, master plan, and the recipes for common questions |
 
 ## What a good change looks like
 
@@ -54,7 +54,7 @@ ituran-axi is used by AI agents, so its output is part of its interface. Follow 
 - **Dependencies:** the only runtime dependency is `@toon-format/toon`, pinned exactly. Discuss any new dependency in an issue first.
 - **Wording:** messages, help and docs use short, plain English sentences.
 
-Add or update tests with every change. When the fake needs to model new Ituran behaviour, extend `test/fake/ituran-fake.ts`, and write down in the pull request what the real API does. When behaviour changes, update the README, the `--help` text and, if needed, the Comis skill in `comis/skills/ituran/`.
+Add or update tests with every change. When the fake needs to model new Ituran behaviour, extend `test/fake/ituran-fake.ts`, and write down in the pull request what the real API does. When behaviour changes, update the README, the `--help` text and the recipes; if the Comis `ituran-read` skill (in the Comis repository, `images/packs/apps/skills/ituran-read/`) needs a change, say so in the pull request.
 
 ## Live tests
 

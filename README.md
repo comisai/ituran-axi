@@ -87,7 +87,7 @@ code: not_found
 usage: "ituran-axi vehicle <plate> [--full]"
 ```
 
-[`comis/skills/ituran/recipes.md`](comis/skills/ituran/recipes.md) has tested shell combinations for common fleet questions.
+[`docs/recipes.md`](docs/recipes.md) has tested shell combinations for common questions about the vehicles.
 
 ### Ituran's own rules
 
@@ -123,7 +123,7 @@ ituran-axi handles these, and says so in its output where it matters:
 
 ## Comis
 
-[`comis/`](comis/README.md) holds the Comis connector bundle: the Gate catalog entry, the `ituran` agent skill and its recipes, and the pack wrapper. Inside Comis, the Gate signs in to Ituran and holds the token. The agent's workbench never sees the password or the token.
+Comis ships `ituran-axi` in its `apps` pack, with the `ituran-read` skill and the `ituran` Gate service in its own repository. Inside Comis, the Gate signs in to Ituran and holds the token, and the agent's workbench never sees the password or the token. [`test/fixtures/comis-ituran-entry.json`](test/fixtures/comis-ituran-entry.json) is a copy of that Gate service; `test/contract/gate-entry.test.ts` checks that every request the AXI sends gets the token as a read, and that sign-in, device commands and writes are denied.
 
 ## Development
 

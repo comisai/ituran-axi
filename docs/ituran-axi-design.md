@@ -480,7 +480,7 @@ A 404 that Ituran uses for "none", such as exports or maintenance on an account 
 
 ## 9. The Gate service entry
 
-The draft is `comis/key-services/ituran.json`, and live test S13 checks it on every run. In brief:
+The entry is the `ituran` service in Comis's `catalog/key-services.json`. `test/fixtures/comis-ituran-entry.json` is its copy here: `test/contract/gate-entry.test.ts` and live test S13 check the AXI's requests against it. In brief:
 
 - **`hosts`:** `api.ituran.com`.
 - **`credential`:** `{"oauth": "ituran", "inject": "bearer", "match": [...]}`. The match list holds the AXI's read routes, and nothing else gets the token.
