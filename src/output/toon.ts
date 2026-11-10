@@ -14,10 +14,14 @@ export const FULL_LIMIT = 262144;
 
 export type Doc = Record<string, unknown>;
 
-/** The indented help footer that follows the encoded body as AXI text. */
+/**
+ * The help footer that follows the encoded body: one hint per line, as a TOON
+ * list (`- ` items, each quoted by the encoder when it must be), so the whole
+ * output decodes as one document.
+ */
 export function helpBlock(lines: readonly string[]): string {
   if (!lines.length) return '';
-  return `help[${lines.length}]:\n${lines.map((l) => `  ${l}\n`).join('')}`;
+  return `help[${lines.length}]:\n${lines.map((l) => `  - ${encode(l)}\n`).join('')}`;
 }
 
 /** Encode a document (made visible first) and append help lines. */

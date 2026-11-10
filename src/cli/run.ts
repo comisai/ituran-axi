@@ -20,7 +20,7 @@ import { totals, trip, trips } from '../commands/trips.ts';
 import { vehicle, vehicles, where } from '../commands/vehicles.ts';
 import { connected, readSettings } from '../config.ts';
 import { AxiError, usage } from '../errors.ts';
-import { errorText, render } from '../output/toon.ts';
+import { errorText, helpBlock, render } from '../output/toon.ts';
 import { VERSION } from '../version.ts';
 import { parseCommand } from './parse.ts';
 import {
@@ -452,7 +452,7 @@ export function topHelp(): string {
     })),
     settings:
       'ITURAN_TOKEN, or ITURAN_USERNAME and ITURAN_PASSWORD; ITURAN_URL (default https://api.ituran.com/api/v2)',
-  })}\nhelp[1]:\n  Run \`${BIN} help <command>\` for its flags\n`;
+  })}\n${helpBlock([`Run \`${BIN} help <command>\` for its flags`])}`;
 }
 
 export function commandHelp(spec: CommandSpec): string {

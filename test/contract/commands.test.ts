@@ -17,10 +17,9 @@ after(() => fake.close());
 
 const run = (...args: string[]) => runBinary(args, env);
 
-/** The encoded TOON body, without the AXI help footer. */
+/** The whole output, help footer included, decoded as one TOON document. */
 function doc(text: string): Record<string, unknown> {
-  const [encoded = ''] = text.split(/^help\[\d+\]:\n/m);
-  return decode(encoded) as Record<string, unknown>;
+  return decode(text) as Record<string, unknown>;
 }
 const summary = (text: string) => String(doc(text).summary);
 async function ok(...args: string[]): Promise<string> {

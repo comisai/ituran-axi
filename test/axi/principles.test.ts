@@ -19,17 +19,24 @@ before(async () => {
 });
 after(() => fake.close());
 
+/** The whole output, help footer included, as one TOON document. */
 function body(text: string): Record<string, unknown> {
-  const [encoded = ''] = text.split(/^help\[\d+\]:\n/m);
-  return decode(encoded) as Record<string, unknown>;
+  return decode(text) as Record<string, unknown>;
 }
 
+/** The help footer's hints: a TOON list at the end, one `- ` item per line. */
 function helpLines(text: string): string[] {
-  const m = /^help\[(\d+)\]:\n((?: {2}.*\n)*)$/m.exec(text);
-  if (!m) return [];
-  const lines = (m[2] ?? '').split('\n').filter(Boolean);
-  assert.equal(lines.length, Number(m[1]), 'help[n] counts its lines');
-  return lines;
+  const m = /^help\[(\d+)\]:\n((?: {2}- .*\n)*)$/m.exec(text);
+  if (!m) {
+    assert.doesNotMatch(text, /^help\[/m, 'a help footer is a TOON list');
+    return [];
+  }
+  const raw = (m[2] ?? '').split('\n').filter(Boolean);
+  assert.equal(raw.length, Number(m[1]), 'help[n] counts its lines');
+  const hints = body(text).help;
+  assert.ok(Array.isArray(hints), 'help decodes as a list');
+  assert.equal(hints.length, raw.length);
+  return hints.map(String);
 }
 
 const LISTS: string[][] = [
@@ -56,6 +63,40 @@ describe('AXI principles', () => {
       assert.equal(r.stderr, '', args.join(' '));
       assert.doesNotThrow(() => body(r.stdout), args.join(' '));
     }
+  });
+
+  it('1b. every output decodes as one TOON document: lists, help, usage and errors', async () => {
+    const outputs: Array<[string, string]> = [];
+    for (const args of [
+      [],
+      ['--help'],
+      ...COMMANDS.filter((c) => c.name).map((c) => [c.name, '--help']),
+      ...LISTS,
+      ...DETAILS,
+      ['vehicles', '--limit', '2'],
+      ['trips', '--date', '2026-11-01'],
+      ['temps'],
+      ['vehicle', '00000000'],
+      ['vehicle'],
+      ['vehicles', '--bogus'],
+      ['frobnicate'],
+    ]) {
+      const r = await run(...args);
+      outputs.push([args.join(' ') || '(home)', r.stdout]);
+    }
+    let footers = 0;
+    for (const [what, text] of outputs) {
+      let doc: Record<string, unknown> = {};
+      assert.doesNotThrow(() => {
+        doc = body(text);
+      }, what);
+      if (/^help\[/m.test(text)) {
+        footers++;
+        assert.ok(Array.isArray(doc.help), what);
+        assert.deepEqual(doc.help, helpLines(text), what);
+      }
+    }
+    assert.ok(footers >= LISTS.length, `${footers} help footers`);
   });
 
   it('2. list rows carry three to five fields by default', async () => {
@@ -145,7 +186,7 @@ describe('AXI principles', () => {
         `${args.join(' ')}: ${lines.length}`,
       );
       for (const line of lines)
-        assert.match(line, /^ {2}Run `ituran-axi [a-z<][^`]*`/, line);
+        assert.match(line, /^Run `ituran-axi [a-z<][^`]*`/, line);
     }
     for (const args of DETAILS)
       assert.deepEqual(
