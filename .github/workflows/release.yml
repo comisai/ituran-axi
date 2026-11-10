@@ -2,7 +2,9 @@ name: release
 # Publishes ituran-axi to npm with signed provenance when a v* tag is pushed.
 # Comis installs AXIs only when their provenance names the source repository
 # (D335; scripts/axi-publishers.mjs), and npm provenance needs a public
-# repository (master plan V1).
+# repository (master plan V1). npm trusts this workflow through OIDC (trusted
+# publishing, master plan K10), so the job holds no npm token; the one-time
+# npm setting is in docs/releasing.md.
 on:
   push:
     tags: ['v*']
@@ -25,6 +27,14 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
+      - name: npm can publish through OIDC (11.5.1 or later)
+        run: |
+          v="$(npm --version)"
+          node -e '
+            const [a, b, c] = process.argv[1].split(".").map(Number);
+            const ok = a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1)));
+            if (!ok) { console.error(`npm ${process.argv[1]} cannot use trusted publishing; it needs 11.5.1 or later.`); process.exit(1); }
+          ' "$v"
       - run: npm ci --ignore-scripts
       - name: Tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
@@ -34,6 +44,7 @@ jobs:
       - run: npm test
       - run: npm run test:dist
       - run: node scripts/check-package.mjs
+      # No NODE_AUTH_TOKEN: npm exchanges the job's OIDC token for a
+      # short-lived publish token. This fails, publishing nothing, until the
+      # trusted publisher is set on npmjs.com (docs/releasing.md).
       - run: npm publish --provenance --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

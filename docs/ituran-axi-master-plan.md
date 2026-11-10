@@ -181,7 +181,7 @@ Send one request:
 | K7 | Slow upstream routes (places 2 to over 60 s) exceed the agent's time | Medium | Low | Deadline-bounded requests, a warning first, and Q7's local computation | Developer |
 | K8 | The production password was handled outside a secret store during development | Already happened | Medium | Kept only in the gitignored `test/live/.env.prod` (mode 0600). Rotate it after M4. Comis gets its own service account (§7). | Owner |
 | K9 | Two AXIs, priority-axi and ituran-axi, land in the `apps` pack's provenance check at once | Medium | Low | One shared change (C5), whichever lands first | Developer |
-| K10 | npm is restricting tokens that bypass two-step sign-in for direct publishing (npm notice on the 0.1.0 publish) | Medium | Medium: the next release fails | Move `release.yml` to npm trusted publishing (OIDC) and remove `NPM_TOKEN` before 0.2.0 | Developer |
+| K10 | npm is restricting tokens that bypass two-step sign-in for direct publishing (npm notice on the 0.1.0 publish) | Medium | Medium: the next release fails | **Workflow done 2026-11-10:** `release.yml` publishes through OIDC with no token. The owner still sets the trusted publisher on npmjs.com once, then deletes the `NPM_TOKEN` secret and the token ([releasing](releasing.md)). The publish token cannot change that setting (npm answered 403). | Owner |
 
 ## 11. Files
 
