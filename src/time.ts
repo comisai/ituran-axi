@@ -172,6 +172,25 @@ export function windowOf(
   return { from, to };
 }
 
+/**
+ * A naive window cut into spans of at most `days` days, newest first, as
+ * Ituran lists trips. The spans meet without overlap: each ends one second
+ * before the next one starts.
+ */
+export function splitWindow(w: Window, days: number): Window[] {
+  const start = naiveMs(w.from) as number;
+  const span = days * 86_400_000;
+  const out: Window[] = [];
+  let end = naiveMs(w.to) as number;
+  while (end - start >= span) {
+    const from = end - span + 1000;
+    out.push({ from: naiveFromMs(from), to: naiveFromMs(end) });
+    end = from - 1000;
+  }
+  if (end >= start) out.push({ from: w.from, to: naiveFromMs(end) });
+  return out;
+}
+
 /** How long ago a naive local time was: "3m", "2h", "5d", or null. */
 export function age(
   timestamp: unknown,

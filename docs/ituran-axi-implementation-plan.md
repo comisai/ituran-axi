@@ -86,6 +86,7 @@ All of these are in `ituran-axi-design.md`.
 | F19 | Temperature history (`/api/v1/temperatures/report`) requires `to_date` and `data_frequency`, the sampling step in minutes. It checks them before entitlement, so this account got 400, not `1006`. | `temps history` sends both, sampling hourly. Found by S14. |
 | F20 | `safety/groups` takes times, one group per call, and counts any time today as the future ("date canot be future date.") | Its window ends at the end of yesterday, and a window inside today is a usage error. The fake refuses today. Found by S14, then probed live. |
 | F21 | The token route accepts the grant as the Comis Gate would send it: form-encoded, with `device_id: comis-gate` | `--form-grant` signs in that way. It confirms C1's wire on production. |
+| F22 | `trips` for the whole account over 31 days fails with HTTP 500; 7 and 8 days answer (about 10,000 trips a week on this account) | `trips` reads a window longer than 7 days a week at a time, newest week first, and joins the pages: the first page of each week gives its count, then only the pages that hold the wanted rows are read. The fake fails account-wide windows over 8 days. Found while answering the owner's questions on 2026-11-09. |
 
 ## 3. Build order
 
