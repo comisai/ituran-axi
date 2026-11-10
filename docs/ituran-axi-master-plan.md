@@ -65,7 +65,7 @@ A milestone is done only when its gate passes. Every gate is a command or a proo
 | M4 | Read qualification | C | M3 | `ituran-live --strict --deep --parity` passes on production (T21) | **Done 2026-11-08** |
 | M5 | Release 0.1.0 | B | M4, V1 | `npm view ituran-axi` shows provenance; live passes on the published package (T22 to T24) | **Done 2026-11-09.** `v0.1.0` was published by `.github/workflows/release.yml` with signed SLSA provenance from commit `4e26148`; `npm audit signatures` verifies it. The live gate on the installed package (`--strict --deep --use-cases`, token mode) passed: 13 pass, 0 fail, 0 blocked; S14 answered 117 of 126 questions, and 9 name ITC, which this account lacks. S3 and S12 are skipped in token mode. |
 | M6 | Comis decisions | D | M0, M1 (Q1) | C1 and C2 decision records accepted by the Comis maintainers (T26) | **Done 2026-11-08.** D3617 ([PR #3617](https://github.com/comisai/comis/pull/3617)) and D3630 ([PR #3630](https://github.com/comisai/comis/pull/3630)) are merged, with their code and tests. |
-| M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | **Done 2026-11-09.** [PR #3683](https://github.com/comisai/comis/pull/3683) merged after `pnpm gate` and the live campaign. The secret-free self-driving stage with a fake Ituran stays deferred: the Gate's exchange cannot reach a fixture on a private address. The `apps-local` and `apps-payload` stages cover the same reads at component level. |
+| M7 | Comis connector | D | M5, M6 | C1 to C7 merged; design §13 proofs pass; `pnpm gate` green | **Done 2026-11-09.** [PR #3683](https://github.com/comisai/comis/pull/3683) merged after `pnpm gate` and the live campaign. The secret-free self-driving stage with a fake Ituran ran on 2026-11-10 and [PR #3724](https://github.com/comisai/comis/pull/3724) merged on 2026-11-11 after `pnpm gate`: the Gate's sign-in now reaches a service's declared range (D3724), and the chief of staff sees which connections can only read (D-new-55), so an engine stop is refused at once. |
 | M8 | The owner uses it | D | M7 | One real question answered through the chief of staff; `comis connect ituran` done from chat | **Done on a test stack 2026-11-09.** The `ituran-campaign` run answered the owner's Hebrew status question, a follow-up and a refused engine stop from the real account (Comis `docs/ituran-live-test.md`). Connect ran on the host; connecting from chat is still to do on the owner's own install. |
 | M9 | Writes and composites | E | M8, W1, Q6 | Phase 3 writes qualified on QA; phase 4 commands each with a parity test | Later |
 
@@ -91,7 +91,7 @@ flowchart LR
   classDef ext fill:#e8f0fe,stroke:#3b6fd6;
 ```
 
-**Critical path, now:** M8 on the owner's own install. M2 to M7 and V1 are done; what remains is connecting from chat on the owner's Comis, and the deferred fake-Ituran stage.
+**Critical path, now:** M8 on the owner's own install. M2 to M7 and V1 are done; what remains is connecting from chat on the owner's Comis.
 
 ## 6. Schedule
 
