@@ -440,6 +440,7 @@ export async function safety(input: CommandInput): Promise<string> {
     // This route counts any time today as the future: its grades cover
     // whole days up to yesterday, so the window ends there.
     const last = yesterday(ctx.now, acc.zone);
+    // biome-ignore lint/complexity/useMathMinMax: these are ISO date strings; Math.min would give NaN.
     const to = w.to < last ? w.to : last;
     if (w.from > to)
       throw usage(
