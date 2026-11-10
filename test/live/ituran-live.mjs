@@ -2157,7 +2157,7 @@ if (!args.parity && !ctx.abort)
   help.push('Run with --parity to compare against ituran-mcp');
 if (help.length) {
   lines.push(`help[${help.length}]:`);
-  for (const h of help) lines.push(`  ${h}`);
+  for (const h of help) lines.push(`  - ${cell(h)}`);
 }
 console.log(scrub(lines.join('\n')));
 

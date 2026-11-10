@@ -168,7 +168,7 @@ Sources: axi.md, read 2026-11-08, and the stricter Comis reading in spec §5.4 (
 | 6 | Structured errors and exit codes | `message`, `code` and `usage` on stdout. Exit 0 for success, 1 for an error, 2 for a usage error. Unknown flags are refused by name. Nothing prompts. Every command is a read, so every command is idempotent. |
 | 7 | Ambient context | No `setup hooks` command: Comis's image is read-only and D240 rejects hook installers. The skill, which the requirement filter injects once Ituran is connected, and the home view give the context. Standalone users get the same from `ituran-axi` with no arguments. |
 | 8 | Content first | `ituran-axi` with no arguments shows the account, zone, vehicle count, what this account may read, and next steps. It also shows the executable path with `~` and a one-line description. |
-| 9 | Contextual disclosure | One to three `help[]` lines of complete commands with `<placeholders>`. A detail view that answers the question carries none. |
+| 9 | Contextual disclosure | One to three `help[]` lines of complete commands with `<placeholders>`. A detail view that answers the question carries none. The footer is a TOON list (`  - ` items, quoted by the encoder when they must be), so the whole output decodes with `@toon-format/toon`. |
 | 10 | A consistent way to get help | `--help` on every command, plus `ituran-axi help [<command>]`, all from one command table. |
 
 ## 4. Options considered
@@ -319,9 +319,9 @@ zone: Asia/Jerusalem (Israel Standard Time)
 vehicles: 164
 not_on_this_account: temperature sensors (ITC)
 help[3]:
-  Run `ituran-axi where --all` for every vehicle's last position
-  Run `ituran-axi trips <plate> --since 24h` for a vehicle's trips
-  Run `ituran-axi vehicles <text>` to find a vehicle by plate, name or model
+  - Run `ituran-axi where --all` for every vehicle's last position
+  - Run `ituran-axi trips <plate> --since 24h` for a vehicle's trips
+  - "Run `ituran-axi vehicles <text>` to find a vehicle by plate, name or model"
 ```
 
 The home view makes two reads, `users/me` and one page of `vehicles`. The `not_on_this_account` line comes from the account cache. A service is listed there only after a command has met its 403, and it leaves the list once a read succeeds. The home view never probes. This was measured on production with the real account; the example uses neutral names.
@@ -335,8 +335,8 @@ vehicles[20 of 164]{plate,age,status,speed,address}:
   12345678,3m,moving,62,"Derech Example 5, Tel Aviv"
   ...
 help[2]:
-  Run `ituran-axi where --all --page 2` for the next 20
-  Run `ituran-axi vehicle <plate>` for one vehicle
+  - Run `ituran-axi where --all --page 2` for the next 20
+  - Run `ituran-axi vehicle <plate>` for one vehicle
 ```
 
 ```text

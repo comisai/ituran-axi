@@ -9,7 +9,7 @@ A read-only command-line tool that lets AI agents read Ituran vehicle tracking: 
 ituran-axi is an AXI, an [agent experience interface](https://axi.md). Every command:
 - prints compact [TOON](https://github.com/toon-format/toon) text on stdout, bounded in size;
 - refuses bad input and says exactly what is wrong;
-- ends with hints for the next command;
+- ends with hints for the next command, as a TOON list, so the whole output decodes as one document;
 - only reads. It never changes Ituran settings or sends commands to a vehicle.
 
 It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents that have a shell: 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It was built to run inside Comis, behind the Comis Gate, and it also works on its own.
@@ -77,9 +77,9 @@ vehicles[3]{plate,age,status,speed,address}:
   "23456789",3m,parking,0,"1 Example Street, Tel Aviv"
   "34567890",3m,parking,0,"2 Example Street, Tel Aviv"
 help[3]:
-  Run `ituran-axi where --all --page 2 --limit 3` for the next 3
-  Run `ituran-axi vehicle <plate>` for one vehicle's driver and saved places
-  Run `ituran-axi trips <plate> --since 24h` for where it went
+  - Run `ituran-axi where --all --page 2 --limit 3` for the next 3
+  - Run `ituran-axi vehicle <plate>` for one vehicle's driver and saved places
+  - Run `ituran-axi trips <plate> --since 24h` for where it went
 
 $ ituran-axi vehicle 00000000
 message: "Ituran found no vehicle 00000000: Entity was not found license_plate: 00000000"

@@ -45,7 +45,7 @@ npm run test:dist   # contract and AXI-principle tests against the built CLI
 
 ituran-axi is used by AI agents, so its output is part of its interface. Follow these rules. `test/axi/principles.test.ts` checks most of them.
 - **Output:** results go to stdout as TOON, starting with a summary line. Output stays within the size limits unless `--full` is given.
-- **Hints:** each hint is one line that starts with ``Run `ituran-axi …` ``.
+- **Hints:** the `help[N]:` footer is a TOON list, one `- ` item per line, so the whole output decodes as one TOON document. `helpBlock` in `src/output/toon.ts` writes it. Each hint starts with ``Run `ituran-axi …` ``.
 - **Errors:** an error prints `message`, `code` and `usage` on stdout. The exit code is 1 for an error and 2 for a usage error. Reuse an existing code before adding a new one.
 - **Read-only:** ituran-axi never changes Ituran settings or sends a command to a vehicle. `src/http.ts` refuses any request that is not a read: a GET, or a POST to a route listed in `READ_POSTS`.
 - **Secrets:** a password or token never appears in output, errors or logs.
