@@ -1,6 +1,6 @@
 {
   "name": "ituran-axi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A read-only command-line tool that lets AI agents read Ituran vehicle tracking",
   "license": "MIT",
   "type": "module",
