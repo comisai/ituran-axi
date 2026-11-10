@@ -2,8 +2,9 @@
 // (docs/ituran-axi-implementation-plan.md §2): the identity grants, a missing
 // Authorization header as 400, paging envelopes (drivers at the top level),
 // 404 404.3 for a search with no match, 404.1 for a plate without trips, 403
-// codes, date-only bounds on trip totals, the inclusive report cursor, and the
-// access-protection and pressure answers. Neutral data only.
+// codes, date-only bounds on trip totals, HTTP 500 for account-wide trips over
+// more than 8 days, the inclusive report cursor, and the access-protection and
+// pressure answers. Neutral data only.
 //
 // Run: node test/fake/ituran-fake.ts [port]   (prints "fake on <port>")
 // User user_a, password secret-pass.
@@ -32,7 +33,12 @@ export interface FakeOptions {
 }
 
 export interface FakeState {
-  requests: Array<{ method: string; path: string; auth?: string }>;
+  requests: Array<{
+    method: string;
+    path: string;
+    query?: string;
+    auth?: string;
+  }>;
   grants: { password: number; refresh: number };
 }
 
@@ -184,7 +190,19 @@ const TRIPS = [
     trip(5000 + i, PLATES[0] as string, '2026-11-07', 6 + i),
   ),
   trip(6000, PLATES[1] as string, '2026-11-08', 9),
+  // One trip a day through October, for windows longer than a week.
+  ...Array.from({ length: 24 }, (_, i) =>
+    trip(
+      7000 + i,
+      PLATES[2] as string,
+      `2026-10-${String(8 + i).padStart(2, '0')}`,
+      10,
+    ),
+  ),
 ];
+
+/** Account-wide trips over more than this many days fail, as production's do. */
+const TRIPS_ACCOUNT_DAYS = 8;
 
 const RECORDS = Array.from({ length: 7 }, (_, i) => ({
   record_id: 9000 + i,
@@ -284,6 +302,7 @@ export async function startFake(options: FakeOptions = {}) {
       state.requests.push({
         method: req.method ?? 'GET',
         path,
+        ...(url.search ? { query: url.search } : {}),
         ...(auth ? { auth } : {}),
       });
       const send = (status: number, json?: unknown) => {
@@ -440,6 +459,13 @@ export async function startFake(options: FakeOptions = {}) {
           });
         const from = q.get('from_date') ?? '';
         const to = q.get('to_date') ?? '';
+        const days =
+          (Date.parse(`${to}Z`) - Date.parse(`${from}Z`)) / 86_400_000;
+        if (!plates.length && days > TRIPS_ACCOUNT_DAYS)
+          return send(500, {
+            error_code: '500',
+            error_description: 'Internal server error',
+          });
         const hits = TRIPS.filter(
           (t) =>
             (!plates.length || plates.includes(String(t.license_plate))) &&

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { joinedRows, type Page } from '../../src/commands/common.ts';
 import { readSettings } from '../../src/config.ts';
 import { type AxiError, classify } from '../../src/errors.ts';
 import { isRead } from '../../src/http.ts';
@@ -10,6 +11,7 @@ import {
   age,
   hoursMinutes,
   localTime,
+  splitWindow,
   windowOf,
   zoneOf,
 } from '../../src/time.ts';
@@ -92,6 +94,99 @@ describe('time', () => {
     assert.equal(age('2026-11-08T11:57:00', NOW, ZONE), '3m');
     assert.equal(age('2026-11-08T09:00:00.120', NOW, ZONE), '3h');
     assert.equal(age('2026-11-01T12:00:00', NOW, ZONE), '7d');
+  });
+});
+
+describe('long windows', () => {
+  it('cuts a window into week spans, newest first, without overlap', () => {
+    const month = splitWindow(
+      { from: '2026-10-08T00:00:00', to: '2026-11-07T23:59:59' },
+      7,
+    );
+    assert.deepEqual(month, [
+      { from: '2026-11-01T00:00:00', to: '2026-11-07T23:59:59' },
+      { from: '2026-10-25T00:00:00', to: '2026-10-31T23:59:59' },
+      { from: '2026-10-18T00:00:00', to: '2026-10-24T23:59:59' },
+      { from: '2026-10-11T00:00:00', to: '2026-10-17T23:59:59' },
+      { from: '2026-10-08T00:00:00', to: '2026-10-10T23:59:59' },
+    ]);
+    const week = { from: '2026-11-01T00:00:00', to: '2026-11-07T23:59:59' };
+    assert.deepEqual(splitWindow(week, 7), [week]);
+    const day = { from: '2026-11-07T08:15:00', to: '2026-11-07T09:00:00' };
+    assert.deepEqual(splitWindow(day, 7), [day]);
+    const odd = splitWindow(
+      { from: '2026-10-31T10:00:00', to: '2026-11-07T10:00:00' },
+      7,
+    );
+    assert.deepEqual(odd, [
+      { from: '2026-10-31T10:00:01', to: '2026-11-07T10:00:00' },
+      { from: '2026-10-31T10:00:00', to: '2026-10-31T10:00:00' },
+    ]);
+  });
+
+  it('reads several lists as one, fetching only the pages it needs', async () => {
+    const calls: string[] = [];
+    const list =
+      (name: string, count: number) =>
+      async (pageNumber: number, pageSize: number): Promise<Page> => {
+        calls.push(`${name}${pageNumber}/${pageSize}`);
+        const ids = Array.from({ length: count }, (_, i) => `${name}${i}`);
+        return {
+          rows: ids
+            .slice((pageNumber - 1) * pageSize, pageNumber * pageSize)
+            .map((id) => ({ id })),
+          total: count,
+        };
+      };
+    const ids = (page: Page) => page.rows.map((r) => r.id).join(' ');
+    const lists = () => [list('a', 12), list('b', 0), list('c', 25)];
+
+    const first = await joinedRows(lists(), 1, 20);
+    assert.equal(first.total, 37);
+    assert.equal(
+      ids(first),
+      'a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 c0 c1 c2 c3 c4 c5 c6 c7',
+    );
+    assert.deepEqual(calls.splice(0), ['a1/20', 'b1/10', 'c1/10']);
+
+    const second = await joinedRows(lists(), 2, 20);
+    assert.equal(
+      ids(second),
+      Array.from({ length: 17 }, (_, i) => `c${i + 8}`).join(' '),
+    );
+    assert.deepEqual(calls.splice(0), [
+      'a1/10',
+      'b1/10',
+      'c1/10',
+      'c1/20',
+      'c2/20',
+    ]);
+
+    const small = await joinedRows(lists(), 3, 5);
+    assert.equal(ids(small), 'a10 a11 c0 c1 c2');
+    assert.deepEqual(calls.splice(0), ['a1/10', 'b1/10', 'c1/10', 'a2/10']);
+
+    const past = await joinedRows(lists(), 9, 5);
+    assert.deepEqual(past, { rows: [], total: 37 });
+
+    const one = await joinedRows([list('a', 12)], 2, 5);
+    assert.equal(ids(one), 'a5 a6 a7 a8 a9');
+  });
+
+  it('refuses a page with no count that might not be the last', async () => {
+    const full = async (_n: number, size: number): Promise<Page> => ({
+      rows: Array.from({ length: size }, (_, i) => ({ id: i })),
+      total: null,
+    });
+    const short = async (): Promise<Page> => ({
+      rows: [{ id: 1 }],
+      total: null,
+    });
+    assert.equal((await joinedRows([short, short], 1, 20)).total, 2);
+    await assert.rejects(joinedRows([full, short], 1, 20), (e: AxiError) => {
+      assert.equal(e.code, 'ituran_error');
+      return true;
+    });
   });
 });
 

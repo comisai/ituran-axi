@@ -93,6 +93,7 @@ usage: "ituran-axi vehicle <plate> [--full]"
 
 ituran-axi handles these, and says so in its output where it matters:
 - Trips are matched by their end time, and appear up to a few hours after they end.
+- Ituran fails a month of trips for the whole account in one request. ituran-axi reads a window longer than 7 days a week at a time, newest week first, and joins the pages.
 - BI reports ignore plate filters, so ituran-axi filters them itself.
 - Operational reports take at most 5 plates and less than 3 days per request. ituran-axi splits the request, walks the pages and removes repeated rows.
 - Alert lists repeat rows, which are removed and counted.

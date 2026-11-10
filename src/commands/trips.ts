@@ -5,7 +5,13 @@
 import type { CommandInput } from '../cli/table.ts';
 import { AxiError, usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
-import { hoursMinutes, localTime, naiveMs, windowOf } from '../time.ts';
+import {
+  hoursMinutes,
+  localTime,
+  naiveMs,
+  splitWindow,
+  windowOf,
+} from '../time.ts';
 import {
   account,
   api,
@@ -13,6 +19,7 @@ import {
   countLine,
   type FetchPage,
   intFlag,
+  joinedRows,
   listOutput,
   MAX_PAGE,
   open,
@@ -21,7 +28,6 @@ import {
   rowsOf,
   str,
   totalOf,
-  windowRows,
 } from './common.ts';
 
 const obj = (v: unknown): Row =>
@@ -29,6 +35,8 @@ const obj = (v: unknown): Row =>
 const round1 = (v: unknown) =>
   typeof v === 'number' ? Math.round(v * 10) / 10 : null;
 const RECENT_HOURS = 6;
+/** Ituran fails an account-wide month of trips with HTTP 500, but answers a week. */
+export const TRIP_SPAN_DAYS = 7;
 const LATE_NOTE =
   'Ituran matches trips by their end time and lists a trip up to a few hours after it ends.';
 
@@ -129,26 +137,30 @@ export async function trips(input: CommandInput): Promise<string> {
       : ['id', 'plate', 'start', 'km', 'driver'],
     KNOWN,
   );
-  const fetchPage: FetchPage = async (page_number, page_size) => {
-    const json = await ctx.client.read({
-      method: 'GET',
-      path: api(ctx, '/trips'),
-      query: {
-        ...(plates.length ? { license_plates: plates } : {}),
-        from_date: w.from,
-        to_date: w.to,
-        page_number,
-        page_size,
+  // Long windows are read a week at a time, newest first, as one list.
+  const lists = splitWindow(w, TRIP_SPAN_DAYS).map(
+    (span): FetchPage =>
+      async (page_number, page_size) => {
+        const json = await ctx.client.read({
+          method: 'GET',
+          path: api(ctx, '/trips'),
+          query: {
+            ...(plates.length ? { license_plates: plates } : {}),
+            from_date: span.from,
+            to_date: span.to,
+            page_number,
+            page_size,
+          },
+          ctx: { what: 'trips', trips: true, ...(one ? { plate: one } : {}) },
+          emptyOn404: true,
+        });
+        return {
+          rows: rowsOf(json, 'trips'),
+          total: json === null ? 0 : totalOf(json),
+        };
       },
-      ctx: { what: 'trips', trips: true, ...(one ? { plate: one } : {}) },
-      emptyOn404: true,
-    });
-    return {
-      rows: rowsOf(json, 'trips'),
-      total: json === null ? 0 : totalOf(json),
-    };
-  };
-  const got = await windowRows(fetchPage, page, limit);
+  );
+  const got = await joinedRows(lists, page, limit);
   const rows = got.rows.map(tripRow);
   const total = got.total;
   const whose = plates.length ? `for ${plates.join(' ')}` : 'for all vehicles';

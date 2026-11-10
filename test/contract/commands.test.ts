@@ -146,6 +146,58 @@ describe('ituran-axi against the fake', () => {
     await fails(1, 'not_found', 'trip', '1');
   });
 
+  it('reads a month of trips a week at a time, newest first', async () => {
+    const window = ['--from', '2026-10-08', '--to', '2026-11-07'];
+    const before = fake.state.requests.length;
+    const month = await ok('trips', ...window);
+    assert.match(summary(month), /^20 of 36 trips for all vehicles$/);
+    const ids = (text: string) =>
+      (doc(text).trips as Array<{ id: number }>).map((t) => t.id);
+    assert.deepEqual(ids(month), [
+      ...Array.from({ length: 12 }, (_, i) => 5000 + i),
+      ...Array.from({ length: 7 }, (_, i) => 7017 + i),
+      7010,
+    ]);
+    assert.match(
+      month,
+      /Run `ituran-axi trips --from 2026-10-08 --to 2026-11-07 --page 2` for the next 16/,
+    );
+    const spans = fake.state.requests
+      .slice(before)
+      .filter((r) => r.path === '/api/v2/trips')
+      .map((r) => new URLSearchParams(r.query));
+    assert.ok(spans.length >= 5);
+    for (const q of spans) {
+      const days =
+        (Date.parse(`${q.get('to_date')}Z`) -
+          Date.parse(`${q.get('from_date')}Z`)) /
+        86_400_000;
+      assert.ok(days < 7, `${q.get('from_date')} to ${q.get('to_date')}`);
+    }
+    const next = await ok('trips', ...window, '--page', '2');
+    assert.match(summary(next), /^16 of 36 trips for all vehicles$/);
+    assert.deepEqual(ids(next), [
+      ...Array.from({ length: 6 }, (_, i) => 7011 + i),
+      ...Array.from({ length: 7 }, (_, i) => 7003 + i),
+      7000,
+      7001,
+      7002,
+    ]);
+    const small = await ok('trips', ...window, '--limit', '5', '--page', '3');
+    assert.deepEqual(ids(small), [5010, 5011, 7017, 7018, 7019]);
+    const plate = await ok(
+      'trips',
+      '34567890',
+      '--from',
+      '2026-10-01',
+      '--to',
+      '2026-10-31',
+      '--limit',
+      '50',
+    );
+    assert.match(summary(plate), /^24 trips for 34567890 · 300 km$/);
+  });
+
   it('shows totals with the right date forms', async () => {
     const all = await ok('totals', '--date', '2026-11-07');
     assert.equal(doc(all).trips, 40);

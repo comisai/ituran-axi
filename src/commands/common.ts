@@ -138,6 +138,63 @@ export async function windowRows(
   return { rows: rows.slice(0, limit), total: a.total };
 }
 
+/** A list's row count: the declared total, or the rows of a page that was not full. */
+function countOf(got: Page, pageSize: number): number {
+  if (got.total !== null) return got.total;
+  if (got.rows.length < pageSize) return got.rows.length;
+  throw new AxiError(
+    'ituran_error',
+    'Ituran sent a page without a row count. Ask for a shorter window.',
+  );
+}
+
+/**
+ * Rows [offset, offset + limit) of several lists read as one, in order. The
+ * first page of each list gives its count; then only the pages that hold the
+ * wanted rows are read. The first list's first page is read at full size,
+ * since the wanted rows are usually there.
+ */
+export async function joinedRows(
+  lists: FetchPage[],
+  page: number,
+  limit: number,
+): Promise<Page> {
+  const [only] = lists;
+  if (lists.length === 1 && only) return windowRows(only, page, limit);
+  const size = Math.max(limit, MIN_PAGE);
+  const offset = (page - 1) * limit;
+  const firstSize = (i: number) => (i === 0 && offset < size ? size : MIN_PAGE);
+  const firsts = await Promise.all(
+    lists.map((fetchPage, i) => fetchPage(1, firstSize(i))),
+  );
+  const counts = firsts.map((got, i) => countOf(got, firstSize(i)));
+  const starts = counts.map((_, i) =>
+    counts.slice(0, i).reduce((a, b) => a + b, 0),
+  );
+  const parts = await Promise.all(
+    lists.map(async (fetchPage, i) => {
+      const from = Math.max(offset - (starts[i] as number), 0);
+      const to = Math.min(
+        offset + limit - (starts[i] as number),
+        counts[i] as number,
+      );
+      if (from >= to) return [];
+      const first = firsts[i] as Page;
+      if (to <= first.rows.length) return first.rows.slice(from, to);
+      const firstPage = Math.floor(from / size) + 1;
+      const rows: Row[] = [];
+      for (let p = firstPage; (p - 1) * size < to; p++)
+        rows.push(...(await fetchPage(p, size)).rows);
+      const base = (firstPage - 1) * size;
+      return rows.slice(from - base, to - base);
+    }),
+  );
+  return {
+    rows: parts.flat().slice(0, limit),
+    total: counts.reduce((a, b) => a + b, 0),
+  };
+}
+
 export interface Walk extends Page {
   /** Why the walk stopped before the declared total, when it did. */
   partial?: string;
