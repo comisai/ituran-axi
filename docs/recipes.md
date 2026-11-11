@@ -43,6 +43,18 @@ ituran-axi vehicles --fields plate,places,age --limit 2000 --full | grep '^  [^-
 ituran-axi report daily --date <YYYY-MM-DD> --limit 1000 --full | grep '^  [^-]' | sort -t, -k3 -nr | head
 ```
 
+**Each vehicle's trips, km, km a day and top speed over the last 30 days** (one row per vehicle, the vehicles that did not drive included; columns: plate, trips, km, km_per_day, max_speed)
+```sh
+ituran-axi trips --since 30d --by plate --limit 2000 --full
+```
+
+**One table: odometer, km a day and top speed for every vehicle** (join on the plate)
+```sh
+ituran-axi odometer --all --limit 2000 --full | grep '^  [^-]' | sort > odometer.csv
+ituran-axi trips --since 30d --by plate --fields plate,km_per_day,max_speed --limit 2000 --full | grep '^  [^-]' | sort > month.csv
+join -t, odometer.csv month.csv
+```
+
 **Fastest trips in the last day** (columns: plate, max_speed, driver)
 ```sh
 ituran-axi trips --since 24h --fields plate,max_speed,driver --limit 2000 --full | grep '^  [^-]' | sort -t, -k2 -nr | head

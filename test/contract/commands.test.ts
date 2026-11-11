@@ -197,6 +197,91 @@ describe('ituran-axi against the fake', () => {
     assert.match(summary(plate), /^24 trips for 34567890 · 300 km$/);
   });
 
+  it('sums a month of trips into one row per vehicle', async () => {
+    const window = ['--from', '2026-10-08', '--to', '2026-11-07'];
+    const before = fake.state.requests.length;
+    const fleet = await ok(
+      'trips',
+      ...window,
+      '--by',
+      'plate',
+      '--limit',
+      '50',
+    );
+    assert.equal(
+      summary(fleet),
+      '13 vehicles · 36 trips · 448.5 km over 31 days',
+    );
+    const rows = doc(fleet).vehicles as Array<Record<string, unknown>>;
+    assert.equal(rows.length, 13);
+    // The most km first; each vehicle's fastest trip is its top speed.
+    assert.deepEqual(rows[0], {
+      plate: '34567890',
+      trips: 24,
+      km: 299,
+      km_per_day: 9.6,
+      max_speed: 104,
+    });
+    assert.deepEqual(rows[1], {
+      plate: '12345678',
+      trips: 12,
+      km: 149.5,
+      km_per_day: 4.8,
+      max_speed: 131,
+    });
+    // A vehicle with no trip in the window still has its row.
+    assert.deepEqual(
+      rows.find((r) => r.plate === '45678901'),
+      { plate: '45678901', trips: 0, km: 0, km_per_day: 0, max_speed: null },
+    );
+    // Every trip of the month is read, a week at a time.
+    const spans = fake.state.requests
+      .slice(before)
+      .filter((r) => r.path === '/api/v2/trips');
+    assert.ok(spans.length >= 5);
+    assert.match(
+      fleet,
+      /Run `ituran-axi odometer --all` for each vehicle's odometer/,
+    );
+
+    const two = await ok(
+      'trips',
+      '12345678',
+      '23456789',
+      '--date',
+      '2026-11-07',
+      '--by',
+      'plate',
+      '--fields',
+      'plate,trips,max_speed,driving,days',
+    );
+    assert.equal(summary(two), '2 vehicles · 12 trips · 149.5 km over 1 days');
+    assert.deepEqual(doc(two).vehicles, [
+      {
+        plate: '12345678',
+        trips: 12,
+        max_speed: 131,
+        driving: '6:00',
+        days: 1,
+      },
+      {
+        plate: '23456789',
+        trips: 0,
+        max_speed: null,
+        driving: '0:00',
+        days: 0,
+      },
+    ]);
+
+    const page = await ok('trips', ...window, '--by', 'plate', '--limit', '5');
+    assert.match(summary(page), /^5 of 13 vehicles · 36 trips/);
+    assert.match(
+      page,
+      /Run `ituran-axi trips --from 2026-10-08 --to 2026-11-07 --by plate --page 2 --limit 5` for the next 5/,
+    );
+    await fails(2, 'usage', 'trips', '--by', 'driver');
+  });
+
   it('shows totals with the right date forms', async () => {
     const all = await ok('totals', '--date', '2026-11-07');
     assert.equal(doc(all).trips, 40);

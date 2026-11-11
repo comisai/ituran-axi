@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { joinedRows, type Page } from '../../src/commands/common.ts';
+import { everyRow, joinedRows, type Page } from '../../src/commands/common.ts';
 import { readSettings } from '../../src/config.ts';
 import { type AxiError, classify } from '../../src/errors.ts';
 import { isRead } from '../../src/http.ts';
@@ -377,5 +377,47 @@ describe('http', () => {
       sleeps.length >= 4 && sleeps.every((ms) => ms > 0),
       JSON.stringify(sleeps),
     );
+  });
+});
+
+describe('everyRow', () => {
+  const list = (n: number, total: number | null = n) => {
+    const asked: number[] = [];
+    const fetchPage = async (page: number, size: number): Promise<Page> => {
+      asked.push(page);
+      const rows = Array.from(
+        { length: Math.max(0, Math.min(size, n - (page - 1) * size)) },
+        (_, i) => ({ id: (page - 1) * size + i }),
+      );
+      return { rows, total };
+    };
+    return { fetchPage, asked };
+  };
+
+  it('reads the pages after the first side by side, each once', async () => {
+    const { fetchPage, asked } = list(25);
+    const got = await everyRow(fetchPage, 10, 1000);
+    assert.equal(got.rows.length, 25);
+    assert.deepEqual(
+      got.rows.map((r) => r.id),
+      Array.from({ length: 25 }, (_, i) => i),
+    );
+    assert.deepEqual([...asked].sort(), [1, 2, 3]);
+    assert.equal(got.partial, undefined);
+  });
+
+  it('stops at the cap and says the rows are partial', async () => {
+    const { fetchPage } = list(45);
+    const got = await everyRow(fetchPage, 10, 20);
+    assert.equal(got.rows.length, 20);
+    assert.equal(got.total, 45);
+    assert.equal(got.partial, 'stopped at 20 rows');
+  });
+
+  it('walks page by page when Ituran sends no total', async () => {
+    const { fetchPage, asked } = list(25, null);
+    const got = await everyRow(fetchPage, 10, 1000);
+    assert.equal(got.rows.length, 25);
+    assert.deepEqual(asked, [1, 1, 2, 3]);
   });
 });

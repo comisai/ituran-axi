@@ -152,7 +152,13 @@ const PLACES = Array.from({ length: 14 }, (_, i) => ({
   points: Array.from({ length: 30 }, () => ({ lat: 32, lon: 34.8 })),
 }));
 
-function trip(id: number, plate: string, day: string, hour: number): Row {
+function trip(
+  id: number,
+  plate: string,
+  day: string,
+  hour: number,
+  maxSpeed = 88,
+): Row {
   const h = String(hour).padStart(2, '0');
   return {
     trip_id: id,
@@ -178,7 +184,7 @@ function trip(id: number, plate: string, day: string, hour: number): Row {
     },
     duration_in_seconds: 1800,
     distance: 12.46,
-    max_speed: 88,
+    max_speed: maxSpeed,
     idle_duration_in_minutes: 4,
     safety: { safety_grade: 90, fuel_grade: 80, safety_events_count: 1 },
     trip_status: 'trip_end',
@@ -186,8 +192,15 @@ function trip(id: number, plate: string, day: string, hour: number): Row {
 }
 
 const TRIPS = [
+  // One trip of each vehicle is faster, for top speeds per vehicle.
   ...Array.from({ length: 12 }, (_, i) =>
-    trip(5000 + i, PLATES[0] as string, '2026-11-07', 6 + i),
+    trip(
+      5000 + i,
+      PLATES[0] as string,
+      '2026-11-07',
+      6 + i,
+      i === 3 ? 131 : 88,
+    ),
   ),
   trip(6000, PLATES[1] as string, '2026-11-08', 9),
   // One trip a day through October, for windows longer than a week.
@@ -197,6 +210,7 @@ const TRIPS = [
       PLATES[2] as string,
       `2026-10-${String(8 + i).padStart(2, '0')}`,
       10,
+      i === 5 ? 104 : 88,
     ),
   ),
 ];
