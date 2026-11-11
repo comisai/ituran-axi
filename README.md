@@ -27,7 +27,7 @@ It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents 
 npm install -g ituran-axi
 ```
 
-Each release is published from GitHub Actions through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers), with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so you can check that it was built from this repository. To run from source instead, see [Development](#development).
+Each release is published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so you can check that it was built from this repository. To run from source instead, see [Development](#development).
 
 ## Configure
 
