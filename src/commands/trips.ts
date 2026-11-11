@@ -2,6 +2,7 @@
 // and lists a trip only some hours after it ends; the output says so when it
 // matters. Totals for the whole account take dates, not times.
 
+import type { Account } from '../account.ts';
 import type { CommandInput } from '../cli/table.ts';
 import { AxiError, usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
@@ -10,13 +11,16 @@ import {
   localTime,
   naiveMs,
   splitWindow,
+  type Window,
   windowOf,
 } from '../time.ts';
 import {
   account,
   api,
+  type Ctx,
   columnsFlag,
   countLine,
+  everyRow,
   type FetchPage,
   intFlag,
   joinedRows,
@@ -28,7 +32,9 @@ import {
   rowsOf,
   str,
   totalOf,
+  walkAll,
 } from './common.ts';
+import { listPage, WALK_PAGE } from './vehicles.ts';
 
 const obj = (v: unknown): Row =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Row) : {};
@@ -121,12 +127,42 @@ const KNOWN = [
   'end_lon',
 ];
 
+/** One week's trips, page by page, for the plates given or the whole account. */
+function tripPages(ctx: Ctx, plates: string[], span: Window): FetchPage {
+  const one = plates.length === 1 ? plates[0] : undefined;
+  return async (page_number, page_size) => {
+    const json = await ctx.client.read({
+      method: 'GET',
+      path: api(ctx, '/trips'),
+      query: {
+        ...(plates.length ? { license_plates: plates } : {}),
+        from_date: span.from,
+        to_date: span.to,
+        page_number,
+        page_size,
+      },
+      ctx: { what: 'trips', trips: true, ...(one ? { plate: one } : {}) },
+      emptyOn404: true,
+    });
+    return {
+      rows: rowsOf(json, 'trips'),
+      total: json === null ? 0 : totalOf(json),
+    };
+  };
+}
+
 export async function trips(input: CommandInput): Promise<string> {
   const ctx = open(input);
   const { values } = input;
   const plates = [...new Set(input.positionals.map(normalizePlate))];
   const acc = await account(ctx);
   const w = windowOf(windowFlags(values), acc.zone, ctx.now, '24h');
+  const by = str(values.by);
+  if (by !== undefined) {
+    if (by !== 'plate')
+      throw usage('--by takes plate: one row per vehicle over the window.');
+    return tripsByPlate(input, ctx, acc, w, plates);
+  }
   const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
   const one = plates.length === 1 ? plates[0] : undefined;
@@ -138,27 +174,8 @@ export async function trips(input: CommandInput): Promise<string> {
     KNOWN,
   );
   // Long windows are read a week at a time, newest first, as one list.
-  const lists = splitWindow(w, TRIP_SPAN_DAYS).map(
-    (span): FetchPage =>
-      async (page_number, page_size) => {
-        const json = await ctx.client.read({
-          method: 'GET',
-          path: api(ctx, '/trips'),
-          query: {
-            ...(plates.length ? { license_plates: plates } : {}),
-            from_date: span.from,
-            to_date: span.to,
-            page_number,
-            page_size,
-          },
-          ctx: { what: 'trips', trips: true, ...(one ? { plate: one } : {}) },
-          emptyOn404: true,
-        });
-        return {
-          rows: rowsOf(json, 'trips'),
-          total: json === null ? 0 : totalOf(json),
-        };
-      },
+  const lists = splitWindow(w, TRIP_SPAN_DAYS).map((span) =>
+    tripPages(ctx, plates, span),
   );
   const got = await joinedRows(lists, page, limit);
   const rows = got.rows.map(tripRow);
@@ -166,8 +183,8 @@ export async function trips(input: CommandInput): Promise<string> {
   const whose = plates.length ? `for ${plates.join(' ')}` : 'for all vehicles';
   const nowLocal = naiveMs(localTime(ctx.now, acc.zone)) as number;
   const recent = nowLocal - (naiveMs(w.to) as number) < RECENT_HOURS * 3600_000;
-  const everyRow = total !== null && rows.length === total;
-  const km = everyRow
+  const allShown = total !== null && rows.length === total;
+  const km = allShown
     ? Math.round(
         rows.reduce((s, r) => s + (typeof r.km === 'number' ? r.km : 0), 0) *
           10,
@@ -209,6 +226,150 @@ export async function trips(input: CommandInput): Promise<string> {
     help: help.slice(0, 3),
     full: values.full === true,
     narrower: 'ituran-axi trips <plate> --since 24h',
+  });
+}
+
+const BY_KNOWN = [
+  'plate',
+  'trips',
+  'km',
+  'km_per_day',
+  'max_speed',
+  'driving',
+  'days',
+];
+/** Trips read per week of a --by plate window before the totals say partial. */
+const BY_CAP = 50_000;
+
+interface Tally {
+  trips: number;
+  km: number;
+  max: number | null;
+  seconds: number;
+  days: Set<string>;
+}
+
+/**
+ * One row per vehicle over the window: its trips, km, km a day (km over the
+ * window's days), top speed, driving time and days with a trip. Every trip of
+ * the window is read, a week at a time; with no plates, every vehicle of the
+ * account has a row, those that did not drive included.
+ */
+async function tripsByPlate(
+  input: CommandInput,
+  ctx: Ctx,
+  acc: Account,
+  w: Window,
+  plates: string[],
+): Promise<string> {
+  const { values } = input;
+  const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
+  const page = intFlag(values.page, 'page', 1, 1, 100_000);
+  const columns = columnsFlag(
+    values.fields,
+    ['plate', 'trips', 'km', 'km_per_day', 'max_speed'],
+    BY_KNOWN,
+  );
+  const [walks, fleet] = await Promise.all([
+    Promise.all(
+      splitWindow(w, TRIP_SPAN_DAYS).map((span) =>
+        everyRow(tripPages(ctx, plates, span), MAX_PAGE, BY_CAP),
+      ),
+    ),
+    plates.length
+      ? Promise.resolve(plates)
+      : walkAll(listPage(ctx), WALK_PAGE).then((all) =>
+          all.rows
+            .map((v) => str(v.license_plate))
+            .filter((p) => p !== undefined),
+        ),
+  ]);
+  const key = (plate: string) => plate.replace(/[\s-]+/g, '').toUpperCase();
+  const tally = new Map<string, Tally & { plate: string }>();
+  const fresh = (plate: string) => ({
+    plate,
+    trips: 0,
+    km: 0,
+    max: null,
+    seconds: 0,
+    days: new Set<string>(),
+  });
+  for (const plate of fleet)
+    if (!tally.has(key(plate))) tally.set(key(plate), fresh(plate));
+  // A trip on a week's or a page's edge can come twice; it counts once.
+  const seen = new Set<unknown>();
+  let tripCount = 0;
+  for (const t of walks.flatMap((walk) => walk.rows)) {
+    const plate = str(t.license_plate);
+    if (!plate) continue;
+    if (t.trip_id !== undefined && t.trip_id !== null) {
+      if (seen.has(t.trip_id)) continue;
+      seen.add(t.trip_id);
+    }
+    tripCount++;
+    const a = tally.get(key(plate)) ?? fresh(plate);
+    a.trips++;
+    if (typeof t.distance === 'number' && t.distance > 0) a.km += t.distance;
+    if (typeof t.max_speed === 'number')
+      a.max = a.max === null ? t.max_speed : Math.max(a.max, t.max_speed);
+    if (typeof t.duration_in_seconds === 'number')
+      a.seconds += t.duration_in_seconds;
+    const day = (
+      str(obj(t.start_location).timestamp) ?? str(obj(t.end_location).timestamp)
+    )?.slice(0, 10);
+    if (day) a.days.add(day);
+    tally.set(key(plate), a);
+  }
+  const days =
+    ((naiveMs(w.to) as number) - (naiveMs(w.from) as number) + 1000) /
+    86_400_000;
+  const all = [...tally.values()]
+    .map(
+      (a): Row => ({
+        plate: a.plate,
+        trips: a.trips,
+        km: round1(a.km),
+        km_per_day: days > 0 ? round1(a.km / days) : null,
+        max_speed: a.max,
+        driving: hoursMinutes(a.seconds),
+        days: a.days.size,
+      }),
+    )
+    .sort(
+      (x, y) =>
+        (y.km as number) - (x.km as number) ||
+        String(x.plate).localeCompare(String(y.plate)),
+    );
+  const rows = all.slice((page - 1) * limit, page * limit);
+  const partial = walks.map((walk) => walk.partial).find(Boolean);
+  const totalKm = round1(all.reduce((s, r) => s + (r.km as number), 0));
+  const summary = `${rows.length ? countLine(rows.length, all.length, 'vehicle') : '0 vehicles'} · ${tripCount} trips · ${totalKm} km over ${round1(days)} days`;
+  const shownTo = (page - 1) * limit + rows.length;
+  const nowLocal = naiveMs(localTime(ctx.now, acc.zone)) as number;
+  const recent = nowLocal - (naiveMs(w.to) as number) < RECENT_HOURS * 3600_000;
+  const help: string[] = [];
+  if (shownTo < all.length)
+    help.push(
+      `Run \`ituran-axi trips ${[...plates, ...flagWords(values), '--by', 'plate', '--page', String(page + 1), ...(limit !== 20 ? ['--limit', String(limit)] : [])].join(' ')}\` for the next ${Math.min(limit, all.length - shownTo)}`,
+    );
+  help.push("Run `ituran-axi odometer --all` for each vehicle's odometer");
+  help.push(
+    `Run \`ituran-axi trips <plate> ${flagWords(values).join(' ')}\` for one vehicle's trips`,
+  );
+  return listOutput({
+    key: 'vehicles',
+    summary,
+    head: {
+      window: `${w.from} to ${w.to}`,
+      zone: acc.zone,
+      ...(partial ? { partial: `trips ${partial}; the totals are low` } : {}),
+      ...(recent ? { note: LATE_NOTE } : {}),
+    },
+    rows,
+    columns,
+    help: help.slice(0, 3),
+    full: values.full === true,
+    narrower: 'ituran-axi trips --by plate --limit <n>',
   });
 }
 

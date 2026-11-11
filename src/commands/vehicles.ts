@@ -31,7 +31,7 @@ import {
 } from './common.ts';
 
 const REALTIME = ['LastLocation', 'Driver', 'Places'];
-const WALK_PAGE = 500;
+export const WALK_PAGE = 500;
 
 const obj = (v: unknown): Row =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Row) : {};
@@ -120,7 +120,10 @@ const KNOWN = [
   'km',
 ];
 
-function listPage(ctx: Ctx, realtime: readonly string[] = []): FetchPage {
+export function listPage(
+  ctx: Ctx,
+  realtime: readonly string[] = [],
+): FetchPage {
   return async (page_number, page_size) => {
     const json = await ctx.client.read({
       method: 'GET',

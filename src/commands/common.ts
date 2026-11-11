@@ -235,6 +235,31 @@ export async function walkAll(
   }
 }
 
+/**
+ * Every row of one list: its first page gives the total, then the other
+ * pages are read side by side. Without a total it walks page by page.
+ */
+export async function everyRow(
+  fetchPage: FetchPage,
+  size: number,
+  cap: number,
+): Promise<Walk> {
+  const first = await fetchPage(1, size);
+  if (first.total === null || first.rows.length < size)
+    return first.total === null && first.rows.length === size
+      ? walkAll(fetchPage, size, cap)
+      : first;
+  const wanted = Math.min(first.total, cap);
+  const pages = Math.ceil(wanted / size);
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, i) => fetchPage(i + 2, size)),
+  );
+  const rows = [first, ...rest].flatMap((page) => page.rows);
+  return first.total > cap
+    ? { rows, total: first.total, partial: `stopped at ${cap} rows` }
+    : { rows, total: first.total };
+}
+
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }

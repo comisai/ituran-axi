@@ -47,6 +47,7 @@ ituran-axi vehicles [<text>]                list, or find by plate digits, name,
 ituran-axi vehicle <plate>                  last position with address, current driver, saved places
 ituran-axi where [<plate>...] [--all] [--stale 2h] [--near <lat,lon> [--within <km>]]
 ituran-axi trips [<plate>...] [window]      trips, matched by their end time
+ituran-axi trips [window] --by plate        one row per vehicle: trips, km, km a day, top speed
 ituran-axi trip <id> [--points] [--safety] [--speeding]
 ituran-axi totals [<plate>] [window]        trip totals for the account or one vehicle
 ituran-axi odometer <plate>... | --all      GPS odometer estimates with their reliability
@@ -93,7 +94,7 @@ usage: "ituran-axi vehicle <plate> [--full]"
 
 ituran-axi handles these, and says so in its output where it matters:
 - Trips are matched by their end time, and appear up to a few hours after they end.
-- Ituran fails a month of trips for the whole account in one request. ituran-axi reads a window longer than 7 days a week at a time, newest week first, and joins the pages.
+- Ituran fails a month of trips for the whole account in one request. ituran-axi reads a window longer than 7 days a week at a time, newest week first, and joins the pages. `trips --by plate` reads every trip of the window this way and sums them per vehicle.
 - BI reports ignore plate filters, so ituran-axi filters them itself.
 - Operational reports take at most 5 plates and less than 3 days per request. ituran-axi splits the request, walks the pages and removes repeated rows.
 - Alert lists repeat rows, which are removed and counted.

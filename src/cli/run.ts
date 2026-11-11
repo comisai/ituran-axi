@@ -150,10 +150,16 @@ export const COMMANDS: readonly Spec[] = [
     args: [{ name: '<plate>', required: false, variadic: true }],
     flags: {
       ...WINDOW,
+      by: {
+        type: 'string',
+        value: 'plate',
+        summary:
+          'One row per vehicle over the window: trips, km, km a day, top speed, driving time and days driven',
+      },
       fields: {
         ...FIELDS,
         summary:
-          'Columns: id, plate, start, end, km, driver, duration, idle, max_speed, safety, events, from, to, status, start_lat, start_lon, end_lat, end_lon',
+          'Columns: id, plate, start, end, km, driver, duration, idle, max_speed, safety, events, from, to, status, start_lat, start_lon, end_lat, end_lon; with --by plate: plate, trips, km, km_per_day, max_speed, driving, days',
       },
       limit: LIMIT,
       page: PAGE,
