@@ -35,7 +35,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { AREAS, useCases } from './use-cases.mjs';
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 // The ituran-mcp release the parity stage compares against.
 const MCP_VERSION = '4.2.0';
 const HERE = dirname(fileURLToPath(import.meta.url));
