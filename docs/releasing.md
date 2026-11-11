@@ -1,26 +1,13 @@
 # Releasing ituran-axi
 
-`.github/workflows/release.yml` publishes to npm when an admin pushes a `v*` tag. Only admins can create, move or delete `v*` tags (the "release tags" ruleset), and the `npm` environment deploys only from those tags. npm trusts the workflow through OIDC ([trusted publishing](https://docs.npmjs.com/trusted-publishers)), so the job holds no npm token, and every version carries signed provenance that names this repository. Comis installs an AXI only when its provenance names its source repository.
+`.github/workflows/release.yml` publishes to npm when an admin pushes a `v*` tag. Only admins can create, move or delete `v*` tags (the "release tags" ruleset), and the `npm` environment deploys only from those tags. The job publishes with the `NPM_TOKEN` secret of the `npm` environment, and every version carries signed provenance that names this repository: the job's OIDC token signs it. Comis installs an AXI only when its provenance names its source repository.
 
-## One-time setup: the trusted publisher
+## Later: trusted publishing
 
-Until this is done, the publish step fails and nothing is published. A token that publishes cannot change this setting (npm answers 403), so the package owner does it, signed in with two-step verification.
-
-On npmjs.com:
-1. Open <https://www.npmjs.com/package/ituran-axi/access>.
-2. Under **Trusted Publisher**, choose **GitHub Actions**.
-3. Enter organization or user `comisai`, repository `ituran-axi`, workflow filename `release.yml`, and environment `npm`.
-4. Save. Under **Publishing access**, choose "Require two-factor authentication and disallow tokens", so only the workflow can publish.
-
-Or, from a terminal with npm 11.19 or later, signed in as the owner:
-
-```sh
-npm trust github ituran-axi --file release.yml --repository comisai/ituran-axi --environment npm
-```
-
-After the first release through OIDC succeeds:
-1. Delete the `NPM_TOKEN` secret from the `npm` environment (repository **Settings → Environments → npm**).
-2. Revoke that token on npmjs.com (**Access Tokens**).
+npm can trust the workflow through OIDC ([trusted publishing](https://docs.npmjs.com/trusted-publishers)), so the job holds no npm token. A token that publishes cannot change this setting (npm answers 403), so the package owner does it, signed in with two-step verification:
+1. On <https://www.npmjs.com/package/ituran-axi/access>, under **Trusted Publisher**, choose **GitHub Actions** and enter organization or user `comisai`, repository `ituran-axi`, workflow filename `release.yml`, and environment `npm`. Or, with npm 11.19 or later: `npm trust github ituran-axi --file release.yml --repository comisai/ituran-axi --environment npm`.
+2. In `release.yml`, remove `NODE_AUTH_TOKEN` from the publish step; npm 11.5.1 or later then exchanges the job's OIDC token for a short-lived publish token.
+3. After a release through OIDC succeeds, choose "Require two-factor authentication and disallow tokens" under **Publishing access**, delete the `NPM_TOKEN` secret from the `npm` environment, and revoke that token on npmjs.com.
 
 ## Each release
 
