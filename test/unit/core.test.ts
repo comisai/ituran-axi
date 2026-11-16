@@ -9,6 +9,7 @@ import { Pace } from '../../src/pace.ts';
 import { normalizePlate } from '../../src/plates.ts';
 import {
   age,
+  ageSeconds,
   hoursMinutes,
   localTime,
   splitWindow,
@@ -31,6 +32,13 @@ const answer = (
 });
 
 describe('time', () => {
+  it('keeps exact wall-clock seconds alongside rounded ages', () => {
+    assert.equal(ageSeconds('2026-11-08T11:56:43', NOW, ZONE), 197);
+    assert.equal(age('2026-11-08T11:56:43', NOW, ZONE), '3m');
+    assert.equal(ageSeconds('2026-11-08T12:00:09', NOW, ZONE), -9);
+    assert.equal(ageSeconds(null, NOW, ZONE), null);
+    assert.equal(ageSeconds('2026-13-01', NOW, ZONE), null);
+  });
   it('maps Windows zone names and falls back to UTC', () => {
     assert.equal(zoneOf('Israel Standard Time'), 'Asia/Jerusalem');
     assert.equal(zoneOf('Europe/Paris'), 'Europe/Paris');
@@ -50,6 +58,10 @@ describe('time', () => {
     assert.deepEqual(
       windowOf({ from: '2026-11-01', to: '2026-11-02T08:30' }, ZONE, NOW, '7d'),
       { from: '2026-11-01T00:00:00', to: '2026-11-02T08:30:00' },
+    );
+    assert.deepEqual(
+      windowOf({ from: '2026-11-07', to: '2026-12-01' }, ZONE, NOW, '7d'),
+      { from: '2026-11-07T00:00:00', to: '2026-11-08T11:58:00' },
     );
     // Today is clamped to now, and date-only routes get dates.
     assert.deepEqual(

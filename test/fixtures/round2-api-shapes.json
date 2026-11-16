@@ -1,0 +1,15 @@
+{
+  "vehicle_groups": [{
+    "vehicle_group_id": 1, "vehicle_group_name": "All", "icon_id": 0,
+    "license_plates": ["12345678", "23456789", "12345678"],
+    "child_groups": [{"vehicle_group_id": 2, "vehicle_group_name": "North", "icon_id": 0,
+      "license_plates": ["23456789", "34567890"], "child_groups": []}]
+  }],
+  "treatments": [
+    {"license_plate": "12345678", "type_id": 1, "type_name": "Oil",
+     "last": {"date": "2026-01-01", "odometer": 10000},
+     "next": {"date": "2026-12-01", "odometer": 20000}},
+    {"license_plate": "12345678", "type_id": 2, "type_name": "Inspection",
+     "last": {"date": null, "odometer": 0}, "next": {"date": null, "odometer": null}}
+  ]
+}

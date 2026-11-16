@@ -191,6 +191,18 @@ export function splitWindow(w: Window, days: number): Window[] {
   return out;
 }
 
+/** Signed seconds between the account's naive local timestamp and its wall clock. */
+export function ageSeconds(
+  timestamp: unknown,
+  now: Date,
+  zone: string,
+): number | null {
+  if (typeof timestamp !== 'string') return null;
+  const then = naiveMs(timestamp);
+  if (then === null) return null;
+  return ((naiveMs(localTime(now, zone)) as number) - then) / 1000;
+}
+
 /** How long ago a naive local time was: "3m", "2h", "5d", or null. */
 export function age(
   timestamp: unknown,

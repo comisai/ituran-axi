@@ -4,7 +4,7 @@
 // repeat a row at a page boundary; the walk splits and removes repeats.
 
 import type { CommandInput } from '../cli/table.ts';
-import { usage } from '../errors.ts';
+import { AxiError, usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
 import { hoursMinutes, naiveMs, windowOf, yesterday } from '../time.ts';
 import { pickColumns } from './catalog.ts';
@@ -103,6 +103,17 @@ function recordRow(r: Row): Row {
     lon: point.lon ?? null,
     odometer: r.odometer ?? null,
     id: r.record_id ?? null,
+    driver_id: driver.driver_id ?? null,
+    places: Array.isArray(r.places)
+      ? (r.places as Row[])
+          .map((p) => str(p.name) ?? str(p.place_name))
+          .filter(Boolean)
+          .join('; ') || null
+      : null,
+    place_ids: Array.isArray(r.places)
+      ? (r.places as Row[]).map((p) => String(p.id ?? p.place_id)).join(' ') ||
+        null
+      : null,
   };
 }
 
@@ -118,6 +129,32 @@ async function biReport(
   const w = windowOf(windowFlags(values), zone, ctx.now, '24h', 'date');
   const limit = intFlag(values.limit, 'limit', 20, 1, REPORT_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
+  let group: Row | null = null;
+  if (typeof values.group === 'string') {
+    group = obj(
+      await ctx.client.read({
+        method: 'GET',
+        path: api(ctx, `/vehicle-groups/${values.group}`),
+        query: { additional_fields: ['license_plates'] },
+        ctx: { what: 'vehicle group membership' },
+      }),
+    );
+    if (!Array.isArray(group.license_plates))
+      throw new AxiError(
+        'ituran_error',
+        'Ituran did not return group membership; no group mileage can be calculated.',
+      );
+    plates = [
+      ...new Set(
+        (group.license_plates as unknown[]).map((p) =>
+          normalizePlate(String(p)),
+        ),
+      ),
+    ];
+  }
+  let groupKm: number | null = null;
+  const reported = new Set<string>();
+  let partial: string | undefined;
   let idleTotal: Row | null = null;
   const fetchPage: FetchPage = async (page_number, page_size) => {
     const json = await ctx.client.read({
@@ -144,8 +181,11 @@ async function biReport(
   let rows: Row[];
   let total: number | null;
   let note: string | undefined;
-  if (plates.length) {
-    const all = await walkAll(fetchPage, REPORT_PAGE);
+  if (plates.length || group) {
+    const all = plates.length
+      ? await walkAll(fetchPage, REPORT_PAGE)
+      : { rows: [], total: 0 };
+    partial = all.partial;
     const wanted = new Set(plates);
     const hits = all.rows.filter(
       (r) =>
@@ -153,6 +193,21 @@ async function biReport(
         (Array.isArray(r.license_plates) &&
           (r.license_plates as unknown[]).some((p) => wanted.has(String(p)))),
     );
+    if (group)
+      for (const r of hits) {
+        const plate = String(r.license_plate);
+        if (wanted.has(plate)) reported.add(plate);
+      }
+    if (group && !partial && reported.size === plates.length) {
+      const distances = hits.map((r) => r.distance ?? r.total_distance);
+      groupKm = distances.every(
+        (km) => typeof km === 'number' && Number.isFinite(km),
+      )
+        ? Math.round(
+            distances.reduce<number>((sum, km) => sum + (km as number), 0) * 10,
+          ) / 10
+        : null;
+    }
     total = hits.length;
     rows = hits.slice((page - 1) * limit, page * limit);
     note =
@@ -189,7 +244,20 @@ async function biReport(
     summary: `${rows.length ? countLine(rows.length, total, 'row') : '0 rows'} of the ${name} report by ${by.slice(0, -1)}`,
     head: {
       window: `${w.from} to ${w.to} (whole days)`,
-      ...(totals && Object.keys(totals).length
+      ...(group
+        ? {
+            group: values.group,
+            group_name: group.vehicle_group_name ?? null,
+            group_vehicles: plates.length,
+            group_reported_vehicles: reported.size,
+            group_unreported_vehicles: plates.length - reported.size,
+            group_km: groupKm,
+            membership:
+              'Current direct members only; child groups excluded. Membership is not historical.',
+          }
+        : {}),
+      ...(partial ? { partial } : {}),
+      ...(totals && !plates.length && !group && Object.keys(totals).length
         ? {
             total: {
               vehicles: totals.vehicles_count ?? null,
@@ -309,6 +377,9 @@ async function operational(
               ),
               ...(cursor !== undefined ? { from_record_id: cursor } : {}),
               ...(over ? { from_speed: over } : {}),
+              ...(typeof values.place === 'string'
+                ? { place_ids: [Number(values.place)] }
+                : {}),
             },
             ctx: {
               what: `the ${name} report`,
@@ -344,9 +415,21 @@ async function operational(
   return listOutput({
     key: 'records',
     summary: `${shown.length} records of the ${name} report for ${plates.join(' ')}${more ? ', more exist' : ''}`,
-    head: { window: `${w.from} to ${w.to}`, zone },
+    head: {
+      window: `${w.from} to ${w.to}`,
+      zone,
+      ...(values.place !== undefined
+        ? {
+            place_id: values.place,
+            note: 'Saved-place event evidence only; records do not establish complete arrival/departure times or continuous visits.',
+          }
+        : {}),
+    },
     rows: shown,
-    columns: ['time', 'plate', 'event', 'speed', 'address'],
+    columns:
+      values.place !== undefined
+        ? ['time', 'plate', 'event', 'place_ids', 'places']
+        : ['time', 'plate', 'event', 'speed', 'address'],
     help: more
       ? [
           `Run the same command with --limit ${Math.min(MAX_PAGE, limit * 5)} or a shorter window for more`,
@@ -366,6 +449,31 @@ export async function report(input: CommandInput): Promise<string> {
   }
   if (input.values.drivers === true && !(name in BI))
     throw usage('--drivers applies to the daily, periodic and idle reports.');
+  const { values } = input;
+  if (values.group !== undefined) {
+    if (
+      !(name in BI) ||
+      values.drivers === true ||
+      input.positionals.length > 1
+    )
+      throw usage(
+        '--group applies to daily, periodic or idle by vehicle; give a group instead of plates or --drivers.',
+      );
+    if (typeof values.group !== 'string' || !/^\d{1,20}$/.test(values.group))
+      throw usage('--group takes a numeric group id from `ituran-axi groups`.');
+  }
+  if (values.place !== undefined) {
+    if (name !== 'events' && name !== 'full')
+      throw usage('--place applies to report events or report full.');
+    if (
+      typeof values.place !== 'string' ||
+      !/^\d{1,10}$/.test(values.place) ||
+      Number(values.place) > 2147483647
+    )
+      throw usage('--place takes a numeric place id from `ituran-axi places`.');
+  }
+  if (name === 'speed' && values.over === undefined)
+    throw usage('report speed needs --over <km/h>, the speed to report above.');
   const ctx = open(input);
   const plates = [...new Set(input.positionals.slice(1).map(normalizePlate))];
   const acc = await account(ctx);

@@ -61,6 +61,8 @@ export async function diagnostics(input: CommandInput): Promise<string> {
     throw usage('--history reads one vehicle: give one plate.');
   const acc = await account(ctx);
   const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
+  const page = intFlag(values.page, 'page', 1, 1, 100_000);
+  const offset = (page - 1) * limit;
   const names =
     typeof values.names === 'string'
       ? values.names
@@ -151,12 +153,12 @@ export async function diagnostics(input: CommandInput): Promise<string> {
     key: 'readings',
     summary,
     head: { zone: acc.zone },
-    rows: rows.slice(0, limit),
+    rows: rows.slice(offset, offset + limit),
     columns: ['plate', 'channel', 'label', 'value', 'age'],
     help:
-      rows.length > limit
+      rows.length > offset + limit
         ? [
-            `Run the same command with --limit ${Math.min(MAX_PAGE, rows.length)} for all ${rows.length}`,
+            `Run the same command with --page ${page + 1} --limit ${limit} for the next ${Math.min(limit, rows.length - offset - limit)} readings`,
           ]
         : [],
     full: values.full === true,
@@ -213,15 +215,30 @@ export async function maintenance(input: CommandInput): Promise<string> {
     summary: all.length
       ? `${countLine(Math.min(limit, all.length), all.length, 'treatment record')}${plate ? ` for ${plate}` : ''}`
       : `0 treatment records${plate ? ` for ${plate}` : ''}: this account keeps no maintenance records in Ituran`,
+    head: {
+      without_due_target: all.filter(
+        (r) =>
+          !r['next.date'] &&
+          !(typeof r['next.odometer'] === 'number' && r['next.odometer'] > 0),
+      ).length,
+      note: 'Due targets are next.date and next.odometer. Missing targets do not mean overdue; verify stale or inconsistent schedules before planning service.',
+    },
     rows: all.slice(0, limit),
-    columns: pickColumns(all, [
-      'license_plate',
-      'treatment_name',
-      'name',
-      'date',
-      'odometer',
-      'next',
-    ]),
+    columns: [
+      ...new Set([
+        ...pickColumns(all, [
+          'license_plate',
+          'treatment_name',
+          'name',
+          'date',
+          'odometer',
+          'next',
+        ]),
+        ...['next.date', 'next.odometer'].filter((k) =>
+          all.some((r) => k in r),
+        ),
+      ]),
+    ],
     help: [],
     full: values.full === true,
     narrower: 'ituran-axi maintenance <plate>',
