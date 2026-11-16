@@ -46,7 +46,11 @@ async function waitFor(check: () => boolean) {
   }
 }
 
-function boundedRun(args: string[], env: Record<string, string>) {
+function boundedRun(
+  args: string[],
+  env: Record<string, string>,
+  guardMs = 4000,
+) {
   return new Promise<{
     code: number | null;
     signal: string | null;
@@ -61,7 +65,7 @@ function boundedRun(args: string[], env: Record<string, string>) {
       answeredAt ||= Date.now();
     });
     child.stdin.end();
-    const guard = setTimeout(() => child.kill('SIGKILL'), 4000);
+    const guard = setTimeout(() => child.kill('SIGKILL'), guardMs);
     child.on('close', (code, signal) => {
       clearTimeout(guard);
       resolve({ code, signal, stdout, exitDelay: Date.now() - answeredAt });
@@ -148,6 +152,126 @@ describe('transport lifecycle across real CLI processes', () => {
           `overlapping reads: ${JSON.stringify(fake.state.requests)}`,
         );
       }
+    } finally {
+      await fake.close();
+    }
+  });
+
+  for (const explicit of [false, true]) {
+    it(`serializes different temporary and cache directories (${explicit ? 'override' : 'default'})`, async () => {
+      const shared = tempDir();
+      const fake = await startFake({ token: 'fake-token', answerDelayMs: 650 });
+      const environments = [0, 1].map(() => {
+        const env = fakeEnv(fake.url, {
+          ITURAN_TOKEN: 'fake-token',
+          TMPDIR: tempDir(),
+        });
+        if (explicit) env.ITURAN_AXI_LOCK_DIR = shared;
+        else delete env.ITURAN_AXI_LOCK_DIR;
+        return env;
+      });
+      try {
+        const results = await Promise.all(
+          environments.map((env) => boundedRun(['drivers'], env)),
+        );
+        for (const result of results)
+          assert.equal(result.code, 0, result.stdout);
+        assert.equal(fake.state.requests.length, 2);
+        assert.ok(
+          (fake.state.requests[1]?.at ?? 0) -
+            (fake.state.requests[0]?.at ?? 0) >=
+            1040,
+          'different TMPDIR and XDG_CACHE_HOME values must still share a lock',
+        );
+      } finally {
+        await fake.close();
+      }
+    });
+  }
+
+  it('rejects a multi-year trip range promptly even with a small limit', async () => {
+    const fake = await startFake({ token: 'fake-token' });
+    try {
+      const started = Date.now();
+      const result = await boundedRun(
+        [
+          'trips',
+          '12345678',
+          '--from',
+          '2020-01-01',
+          '--to',
+          '2026-11-15',
+          '--limit',
+          '5',
+        ],
+        fakeEnv(fake.url, { ITURAN_TOKEN: 'fake-token' }),
+      );
+      assert.equal(result.signal, null, JSON.stringify(result));
+      assert.equal(result.code, 2, result.stdout);
+      assert.match(result.stdout, /^code: usage$/m);
+      assert.match(result.stdout, /at most 56 days/);
+      assert.ok(
+        Date.now() - started < 3000,
+        'range validation must not walk old weeks',
+      );
+      assert.equal(
+        fake.state.requests.filter((r) => r.path === '/api/v2/trips').length,
+        0,
+      );
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it('bounds stalled commands without a task deadline and with a later task deadline', async () => {
+    const fake = await startFake({ stall: 'headers', token: 'fake-token' });
+    try {
+      await Promise.all(
+        [false, true].map(async (laterDeadline) => {
+          const started = Date.now();
+          const result = await boundedRun(
+            ['trips', '12345678', '--since', '7d', '--limit', '5'],
+            fakeEnv(fake.url, {
+              ITURAN_TOKEN: 'fake-token',
+              ...(laterDeadline
+                ? { COMIS_DEADLINE: String(Date.now() + 120_000) }
+                : {}),
+            }),
+            30_000,
+          );
+          assert.equal(result.signal, null, JSON.stringify(result));
+          assert.equal(result.code, 1, result.stdout);
+          assert.match(result.stdout, /^code: unreachable$/m);
+          assert.match(result.stdout, /Ituran did not answer within/);
+          assert.ok(
+            Date.now() - started < 27_000,
+            'overall budget must stay well inside 30 seconds',
+          );
+        }),
+      );
+      assert.equal(fake.state.requests.length, 2);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it('shares the deadline across successful windows and pacing', async () => {
+    const fake = await startFake({ token: 'fake-token' });
+    try {
+      const result = await boundedRun(
+        ['trips', '--from', '2026-09-13', '--to', '2026-11-07', '--limit', '5'],
+        fakeEnv(fake.url, {
+          ITURAN_TOKEN: 'fake-token',
+          COMIS_DEADLINE: String(Date.now() + 2200),
+        }),
+      );
+      assert.equal(result.signal, null);
+      assert.equal(result.code, 1, result.stdout);
+      assert.match(result.stdout, /^code: unreachable$/m);
+      assert.ok(
+        fake.state.requests.filter((r) => r.path === '/api/v2/trips').length <
+          8,
+      );
     } finally {
       await fake.close();
     }
@@ -311,11 +435,12 @@ describe('transport lifecycle across real CLI processes', () => {
     assert.ok(existsSync(join(dir, 'command.next')));
   });
 
-  it('uses a shared temporary fallback when the cache is read-only', async () => {
+  it('uses the selected shared directory when the cache is read-only', async () => {
     const fake = await startFake({ token: 'fake-token', answerDelayMs: 200 });
     const env = fakeEnv(fake.url, {
       ITURAN_TOKEN: 'fake-token',
       TMPDIR: tempDir(),
+      ITURAN_AXI_LOCK_DIR: tempDir(),
     });
     mkdirSync(env.XDG_CACHE_HOME as string, { recursive: true });
     chmodSync(env.XDG_CACHE_HOME as string, 0o500);
@@ -336,7 +461,7 @@ describe('transport lifecycle across real CLI processes', () => {
     }
   });
 
-  it('keeps successful output unchanged when neither cache nor temporary storage is writable', async () => {
+  it('keeps successful output unchanged when the selected lock directory is unavailable', async () => {
     const fake = await startFake({ token: 'fake-token' });
     const env = fakeEnv(fake.url, { ITURAN_TOKEN: 'fake-token' });
     const unavailable = join(tempDir(), 'not-a-directory');
@@ -345,6 +470,7 @@ describe('transport lifecycle across real CLI processes', () => {
       const expected = await runBinary(['drivers'], env);
       const actual = await runBinary(['drivers'], {
         ...env,
+        ITURAN_AXI_LOCK_DIR: unavailable,
         XDG_CACHE_HOME: unavailable,
         TMPDIR: unavailable,
       });

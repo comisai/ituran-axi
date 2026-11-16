@@ -197,6 +197,38 @@ describe('ituran-axi against the fake', () => {
     assert.match(summary(plate), /^24 trips for 34567890 · 300 km$/);
   });
 
+  it('accepts 56 days but refuses a longer trip window, including aggregates', async () => {
+    await ok(
+      'trips',
+      '12345678',
+      '--from',
+      '2026-09-13',
+      '--to',
+      '2026-11-07',
+      '--limit',
+      '5',
+    );
+    const before = fake.state.requests.length;
+    for (const extra of [[], ['--by', 'plate']]) {
+      const out = await fails(
+        2,
+        'usage',
+        'trips',
+        '--from',
+        '2026-09-12',
+        '--to',
+        '2026-11-07',
+        ...extra,
+      );
+      assert.match(out, /at most 56 days/);
+    }
+    assert.equal(
+      fake.state.requests.length,
+      before,
+      'cached account; no reads for invalid ranges',
+    );
+  });
+
   it('sums a month of trips into one row per vehicle', async () => {
     const window = ['--from', '2026-10-08', '--to', '2026-11-07'];
     const before = fake.state.requests.length;

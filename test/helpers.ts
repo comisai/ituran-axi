@@ -44,6 +44,7 @@ export function fakeEnv(
     HOME: home,
     XDG_STATE_HOME: join(home, 'state'),
     XDG_CACHE_HOME: join(home, 'cache'),
+    ITURAN_AXI_LOCK_DIR: join(home, 'cache', 'ituran-axi'),
     ...extra,
   };
 }
