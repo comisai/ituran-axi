@@ -7,7 +7,7 @@ needs every row: add `--full` (default output stops at about 4,000 characters)
 and a `--limit` that covers the total in the summary line. Reports and safety
 grades take at most 1,000 rows a page.
 
-Run commands in sequence. Commands sharing the same user's cache also take a process lock, with a 400 ms gap between commands; a concurrent command waits up to 30 seconds (less when `COMIS_DEADLINE` is set), then returns `unreachable` if the lock is still busy. Different cache directories or hosts do not share this lock.
+Run commands in sequence. Commands sharing the same user's cache also take a process lock, with a 400 ms gap between commands; a concurrent command waits up to 30 seconds (less when `COMIS_DEADLINE` is set), then returns `busy` if the lock is still held. Wait for that command to finish before trying again. Abandoned locks recover automatically. Unavailable cache storage falls back to a shared lock in the system temporary directory; if neither location is writable, reads continue without process locking. Different cache directories or hosts need external coordination.
 
 **Vehicles not seen for two days**
 ```sh
