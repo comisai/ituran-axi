@@ -7,7 +7,7 @@ needs every row: add `--full` (default output stops at about 4,000 characters)
 and a `--limit` that covers the total in the summary line. Reports and safety
 grades take at most 1,000 rows a page.
 
-Run commands in sequence. Commands sharing the same user's cache also take a process lock, with a 400 ms gap between commands; a concurrent command waits up to 30 seconds (less when `COMIS_DEADLINE` is set), then returns `busy` if the lock is still held. Wait for that command to finish before trying again. Abandoned locks recover automatically. Unavailable cache storage falls back to a shared lock in the system temporary directory; if neither location is writable, reads continue without process locking. Different cache directories or hosts need external coordination.
+Run commands in sequence. Commands for the same host user take a process lock, with a 400 ms gap between commands. The lock directory defaults to `/tmp/ituran-axi-<uid>`, independent of per-command temporary and cache directories. Wrappers with private filesystem namespaces must set `ITURAN_AXI_LOCK_DIR` to one writable directory shared by every command. If the selected directory is unavailable, reads continue without process locking. Separate users or hosts need external coordination. Abandoned locks recover automatically. A concurrent command waits within its 25-second overall budget (less when `COMIS_DEADLINE` is earlier), then returns `busy` if the lock is still held. Other timeouts return `unreachable`; ask for a shorter window before trying again. `trips`, including `--by plate`, accepts at most 56 days; `--limit` only limits output rows.
 
 **Vehicles not seen for two days**
 ```sh

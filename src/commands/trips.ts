@@ -43,6 +43,7 @@ const round1 = (v: unknown) =>
 const RECENT_HOURS = 6;
 /** Ituran fails an account-wide month of trips with HTTP 500, but answers a week. */
 export const TRIP_SPAN_DAYS = 7;
+const MAX_TRIP_DAYS = 56;
 const LATE_NOTE =
   'Ituran matches trips by their end time and lists a trip up to a few hours after it ends.';
 
@@ -157,6 +158,16 @@ export async function trips(input: CommandInput): Promise<string> {
   const plates = [...new Set(input.positionals.map(normalizePlate))];
   const acc = await account(ctx);
   const w = windowOf(windowFlags(values), acc.zone, ctx.now, '24h');
+  // joinedRows reads every week's count, even for --limit 1. Bound that
+  // work before scheduling any trip requests, including --by plate.
+  if (
+    (naiveMs(w.to) as number) - (naiveMs(w.from) as number) >=
+    MAX_TRIP_DAYS * 86_400_000
+  ) {
+    throw usage(
+      'Trips cover at most 56 days per command. Ask for a shorter window; --limit only limits output rows.',
+    );
+  }
   const by = str(values.by);
   if (by !== undefined) {
     if (by !== 'plate')

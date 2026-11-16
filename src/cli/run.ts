@@ -167,7 +167,7 @@ export const COMMANDS: readonly Spec[] = [
       page: PAGE,
       full: FULL,
     },
-    summary: 'Trips in a window, default the last 24h',
+    summary: 'Trips, default 24h, at most 56 days',
     run: trips,
   },
   {
@@ -524,6 +524,7 @@ function remember(spec: Spec, io: Io, error: AxiError | null): void {
 }
 
 export async function main(argv: string[], io: Io): Promise<number> {
+  const commandDeadline = Date.now() + 25_000;
   let spec: Spec = HOME;
   let usageText = `${BIN} [command] [flags]`;
   try {
@@ -565,13 +566,22 @@ export async function main(argv: string[], io: Io): Promise<number> {
     }
     // Help and local logout do not need network serialization. Validate the
     // connection before creating a lock so missing settings stay actionable.
-    const input = { ...parsed, io };
-    const out =
-      spec.name === 'logout'
-        ? await spec.run(input)
-        : await withCommandLock(io.env, connected(io.env).deadline, () =>
-            spec.run(input),
-          );
+    let out: string;
+    if (spec.name === 'logout') {
+      out = await spec.run({ ...parsed, io });
+    } else {
+      const settings = connected(io.env);
+      const deadline = Math.min(commandDeadline, settings.deadline ?? Infinity);
+      // One deadline covers lock waiting, sign-in, pacing, retries and every
+      // page/window. A task deadline further in the future cannot extend it.
+      const commandIo = {
+        ...io,
+        env: { ...io.env, COMIS_DEADLINE: String(deadline) },
+      };
+      out = await withCommandLock(commandIo.env, deadline, () =>
+        spec.run({ ...parsed, io: commandIo }),
+      );
+    }
     remember(spec, io, null);
     io.stdout(out);
     return 0;

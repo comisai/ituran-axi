@@ -1,4 +1,4 @@
-// One network command at a time per user's cache, across accounts and tokens.
+// One network command at a time per host user, across accounts and tokens.
 // A heartbeat lease and owner token let killed processes recover without
 // deleting or refreshing a replacement owner's lock.
 
@@ -16,7 +16,7 @@ import {
   type Stats,
   writeFileSync,
 } from 'node:fs';
-import { homedir, hostname, tmpdir } from 'node:os';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AxiError } from './errors.ts';
@@ -174,21 +174,20 @@ export async function withCommandLock<T>(
     );
   }
   const until = performance.now() + waitMs;
-  const root = env.XDG_CACHE_HOME || join(env.HOME || homedir(), '.cache');
+  // Never derive this from TMPDIR or XDG_CACHE_HOME: workbench commands
+  // can each receive different temporary and cache directories. Wrappers
+  // with private /tmp mounts must supply one shared, writable directory.
+  const dir =
+    env.ITURAN_AXI_LOCK_DIR ||
+    join('/tmp', `ituran-axi-${process.getuid?.() ?? 'user'}`);
   const owner: Owner = {
     pid: process.pid,
     hostname: hostname(),
     token: randomUUID(),
   };
-  const held =
-    (await acquire(join(root, 'ituran-axi'), until, owner)) ??
-    (await acquire(
-      join(tmpdir(), `ituran-axi-${process.getuid?.() ?? 'user'}`),
-      until,
-      owner,
-    ));
-  // Cache storage is an optimization. Preserve reads even if both locations
-  // are unavailable; contention on a usable lock never takes this fallback.
+  const held = await acquire(dir, until, owner);
+  // Preserve reads when the selected directory is unavailable. A usable
+  // lock's contention never takes this unlocked fallback.
   if (!held) return fn();
 
   const ownsPath = () => {

@@ -17,8 +17,8 @@ import { tempDir } from '../helpers.ts';
 
 describe('command lock ownership and lease recovery', () => {
   it('rechecks freshness after renaming and restores a lock that became live', async (t) => {
-    const env = { XDG_CACHE_HOME: tempDir() };
-    const dir = join(env.XDG_CACHE_HOME, 'ituran-axi');
+    const env = { ITURAN_AXI_LOCK_DIR: tempDir() };
+    const dir = env.ITURAN_AXI_LOCK_DIR;
     const lock = join(dir, 'command.lock');
     mkdirSync(dir, { recursive: true });
     const owner = JSON.stringify({
@@ -44,8 +44,8 @@ describe('command lock ownership and lease recovery', () => {
   });
 
   it('treats EPERM during the PID check as a live owner', async (t) => {
-    const env = { XDG_CACHE_HOME: tempDir() };
-    const dir = join(env.XDG_CACHE_HOME, 'ituran-axi');
+    const env = { ITURAN_AXI_LOCK_DIR: tempDir() };
+    const dir = env.ITURAN_AXI_LOCK_DIR;
     const lock = join(dir, 'command.lock');
     mkdirSync(dir, { recursive: true });
     const owner = JSON.stringify({
@@ -67,8 +67,8 @@ describe('command lock ownership and lease recovery', () => {
   });
 
   it('does not refresh or remove a replacement owner lock', async () => {
-    const env = { XDG_CACHE_HOME: tempDir() };
-    const lock = join(env.XDG_CACHE_HOME, 'ituran-axi', 'command.lock');
+    const env = { ITURAN_AXI_LOCK_DIR: tempDir() };
+    const lock = join(env.ITURAN_AXI_LOCK_DIR, 'command.lock');
     const replacement = JSON.stringify({
       pid: process.pid,
       hostname: hostname(),
@@ -89,8 +89,8 @@ describe('command lock ownership and lease recovery', () => {
   });
 
   it('recovers an expired heartbeat from a different host and preserves new ownership', async () => {
-    const env = { XDG_CACHE_HOME: tempDir() };
-    const dir = join(env.XDG_CACHE_HOME, 'ituran-axi');
+    const env = { ITURAN_AXI_LOCK_DIR: tempDir() };
+    const dir = env.ITURAN_AXI_LOCK_DIR;
     const lock = join(dir, 'command.lock');
     mkdirSync(dir, { recursive: true });
     writeFileSync(
