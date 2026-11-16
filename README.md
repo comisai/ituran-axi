@@ -14,7 +14,7 @@ ituran-axi is an AXI, an [agent experience interface](https://axi.md). Every com
 
 It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents that have a shell: 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It was built to run inside Comis, behind the Comis Gate, and it also works on its own.
 
-> **Status:** early development (0.x). Every command is tested end to end against the production Ituran API.
+> **Status:** early development (0.x). Command families have been checked against production. New changes are tested against a fake Ituran; see each pull request for live-validation coverage.
 
 ## Requirements
 
@@ -54,10 +54,10 @@ ituran-axi odometer <plate>... | --all      GPS odometer estimates with their re
 ituran-axi centers [--near <plate|lat,lon>] Ituran service centers, nearest first
 ituran-axi drivers [<text>] | driver <id>
 ituran-axi places [<text>] | place <id> [--vehicles]
-ituran-axi groups [<id>]
+ituran-axi groups [<id>] [--vehicles]
 ituran-axi events [--all] | event <id>      event states, and the vehicles in each now
 ituran-axi alerts [--plate <plate>]         alert definitions
-ituran-axi diagnostics <plate>... | --all [--names a,b] [--history --date <d>]
+ituran-axi diagnostics <plate>... | --all [--names a,b] [--history --date <d>] [--page N]
 ituran-axi report daily|periodic|idle [<plate>...] [--drivers] [window]
 ituran-axi report speed|events|engine|full|diagnostics|heat-map <plate>... [window] [--over <km/h>]
 ituran-axi safety [totals|vehicles|drivers|groups|periodic|ubi-vehicles|ubi-drivers] [window]
@@ -66,6 +66,14 @@ ituran-axi temps [current|history <plate>|breaches]
 ituran-axi logout
 ituran-axi help [<command>]                 every flag of a command
 ```
+
+Position fields include `age_seconds` alongside the rounded `age`, plus `driver_id`, `groups` and `group_ids`. Select them with `where --fields` or `vehicles --fields`; `vehicle` includes the age in `position` and a `groups` list. `age_seconds` converts the timestamp using the account zone's offset at that time, so it measures elapsed seconds across DST changes; negative values indicate future timestamps. Repeated fall-back times and nonexistent spring-forward times return `null` because they have no unique instant. The rounded `age` retains its existing wall-clock display.
+
+`groups <id>` requests the member plates Ituran lists for that group. `groups --vehicles` includes counts and plates throughout the tree. `report daily|periodic|idle --group <id>` filters by those plates and adds `group_km` for all matching rows before output paging. Membership is current. Child-group lists are not merged, and whether the parent's plate list includes descendants remains unverified until a live run. These reads cannot reconstruct historical membership. Group totals are `null` if the report walk is partial or member report rows or distance fields are missing. `group_reported_vehicles` and `group_unreported_vehicles` show that coverage. The coverage rule assumes a BI row per member. Whether BI omits stationary vehicles and whether idle rows carry distance are unverified until a live run; conservative totals may remain `null`. Fleet-wide idle totals are omitted when filtering to plates or a group.
+
+`report events|full <plate>... --place <id> [window]` reads dated saved-place evidence, including place IDs and names. It requires explicit plates. Records do not establish complete arrival/departure times or continuous visits. `events --all` shows current states, including empty ones; use `report events` for history. `report speed` requires `--over <km/h>`.
+
+`maintenance` preserves its existing columns and adds `next.date`, `next.odometer` and `next.engine_hours` when present. `without_due_target` counts records with no date or positive odometer/engine-hours target. Missing targets do not mean overdue. `diagnostics --page N --limit N` pages the readings after all vehicle pages have been read; each reading retains its own age. Pages re-read current data and can shift between calls. `--full` lifts output size bounds, while `--limit` and `--page` still control rows.
 
 A **window** is `--since 90m|24h|7d`, `--from <t> [--to <t>]`, or `--date YYYY-MM-DD`. Times are local to the account's time zone, which the home view shows, and take the form `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. **Lists** take `--limit`, `--page`, `--fields` and `--full`.
 
@@ -88,7 +96,7 @@ code: not_found
 usage: "ituran-axi vehicle <plate> [--full]"
 ```
 
-[`docs/recipes.md`](docs/recipes.md) has tested shell combinations for common questions about the vehicles.
+[`docs/round2-gaps.md`](docs/round2-gaps.md) records the API evidence and remaining limits. [`docs/recipes.md`](docs/recipes.md) has tested shell combinations for common questions about the vehicles.
 
 ### Ituran's own rules
 

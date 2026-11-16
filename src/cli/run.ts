@@ -88,7 +88,7 @@ export const COMMANDS: readonly Spec[] = [
       fields: {
         ...FIELDS,
         summary:
-          'Columns: plate, name, model, make, year, status, color, age, time, speed, limit, lat, lon, address, odometer, driver, places',
+          'Columns: plate, name, model, make, year, status, color, age, age_seconds, time, speed, limit, lat, lon, address, odometer, driver, driver_id, groups, group_ids, places',
       },
       limit: LIMIT,
       page: PAGE,
@@ -106,7 +106,8 @@ export const COMMANDS: readonly Spec[] = [
         summary: "Also the VIN, IDs and the driver's phone",
       },
     },
-    summary: 'One vehicle: position, driver and saved places',
+    summary:
+      'One vehicle: position with age in seconds, driver, groups and saved places',
     run: vehicle,
   },
   {
@@ -136,7 +137,7 @@ export const COMMANDS: readonly Spec[] = [
       fields: {
         ...FIELDS,
         summary:
-          'Columns: plate, name, model, make, year, status, age, time, speed, limit, lat, lon, address, odometer, driver, places, km',
+          'Columns: plate, name, model, make, year, status, age, age_seconds, time, speed, limit, lat, lon, address, odometer, driver, driver_id, groups, group_ids, places, km',
       },
       limit: LIMIT,
       page: PAGE,
@@ -279,8 +280,14 @@ export const COMMANDS: readonly Spec[] = [
   {
     name: 'groups',
     args: [{ name: '<id>', required: false }],
-    flags: { full: FULL },
-    summary: 'Vehicle groups, or one group',
+    flags: {
+      vehicles: {
+        type: 'boolean',
+        summary: 'Include listed member counts and plates in the group tree',
+      },
+      full: FULL,
+    },
+    summary: 'Vehicle groups, or one group with its listed member plates',
     run: groups,
   },
   {
@@ -289,7 +296,7 @@ export const COMMANDS: readonly Spec[] = [
     flags: {
       all: {
         type: 'boolean',
-        summary: 'Include definitions with no vehicles in that state',
+        summary: 'Include empty current states; use report events for history',
       },
       limit: LIMIT,
       full: FULL,
@@ -335,9 +342,10 @@ export const COMMANDS: readonly Spec[] = [
       },
       date: WINDOW.date as FlagSpec,
       limit: LIMIT,
+      page: PAGE,
       full: FULL,
     },
-    summary: 'Sensor readings, latest or over one day',
+    summary: 'Paged sensor readings, latest or over one day',
     run: diagnostics,
   },
   {
@@ -352,10 +360,22 @@ export const COMMANDS: readonly Spec[] = [
         type: 'boolean',
         summary: 'By driver instead of by vehicle (daily, periodic, idle)',
       },
+      group: {
+        type: 'string',
+        value: '<id>',
+        summary:
+          'Current listed group plates; daily, periodic or idle by vehicle, with group km total',
+      },
+      place: {
+        type: 'string',
+        value: '<id>',
+        summary:
+          'Saved-place event evidence; report events or full, with explicit plates',
+      },
       over: {
         type: 'string',
         value: '<km/h>',
-        summary: 'The speed to report above (speed report)',
+        summary: 'Required for report speed: the speed to report above',
       },
       limit: LIMIT,
       page: PAGE,
@@ -396,7 +416,7 @@ export const COMMANDS: readonly Spec[] = [
       limit: LIMIT,
       full: FULL,
     },
-    summary: 'Maintenance records and schedules',
+    summary: 'Maintenance date, odometer and engine-hours targets',
     run: maintenance,
     service: 'maintenance',
   },

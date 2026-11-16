@@ -9,8 +9,16 @@
 // Run: node test/fake/ituran-fake.ts [port]   (prints "fake on <port>")
 // User user_a, password secret-pass.
 
+import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+
+const ROUND2 = JSON.parse(
+  readFileSync(
+    new URL('../fixtures/round2-api-shapes.json', import.meta.url),
+    'utf8',
+  ),
+);
 
 type Row = Record<string, unknown>;
 
@@ -29,6 +37,16 @@ export interface FakeOptions {
   temps?: boolean;
   /** A bearer token accepted without a grant, as the Gate's placeholder is. */
   token?: string;
+  /** Neutral schedules with next.date and next.odometer. */
+  maintenanceRecords?: boolean;
+  /** Model an empty or unavailable direct membership set. */
+  groupPlates?: string[] | null;
+  /** Exercise paging beyond the fleet-manager place-list sample. */
+  placeCount?: number;
+  /** Fail after the first full BI page. */
+  biPartial?: boolean;
+  /** Override BI distance with malformed/missing upstream data. */
+  biDistance?: unknown;
   port?: number;
 }
 
@@ -88,13 +106,20 @@ function vehicle(plate: string, i: number): Row {
     color: i % 3 ? 'white' : 'red',
     motion_status: i % 4 === 0 ? 'driving' : 'parking',
     telematics_units: [{ ip_address: '10.0.0.1' }],
+    vehicle_groups: [{ id: 1, name: 'All' }],
   };
 }
 
 const VEHICLES = [...PLATES, NOT_TRACKED].map(vehicle);
 
-function realtime(v: Row, i: number, fields: string[]): Row {
+function realtime(
+  v: Row,
+  i: number,
+  fields: string[],
+  additional: string[] = [],
+): Row {
   const out: Row = { ...v };
+  if (!additional.includes('VehicleGroup')) delete out.vehicle_groups;
   if (fields.includes('LastLocation')) {
     out.last_location = {
       location: {
@@ -233,7 +258,7 @@ const RECORDS = Array.from({ length: 7 }, (_, i) => ({
     address: { location: 'Report Road 3', speedlimit: 50 },
   },
   timestamp: `2026-11-07T0${i}:00:00`,
-  places: [],
+  places: i % 2 === 0 ? [{ id: 77, name: 'Depot' }] : [],
 }));
 
 function paging(
@@ -421,7 +446,9 @@ export async function startFake(options: FakeOptions = {}) {
       }
       if (req.method === 'GET' && path === '/api/v2/vehicles')
         return list(
-          VEHICLES.map((v, i) => realtime(v, i, rt)),
+          VEHICLES.map((v, i) =>
+            realtime(v, i, rt, q.getAll('additional_fields')),
+          ),
           'vehicles',
         );
       r = req.method === 'GET' ? m(/^\/api\/v2\/vehicles\/([0-9A-Z]+)$/) : null;
@@ -438,9 +465,13 @@ export async function startFake(options: FakeOptions = {}) {
               },
             ],
           });
-        return send(200, realtime(VEHICLES[i] as Row, i, rt));
+        return send(
+          200,
+          realtime(VEHICLES[i] as Row, i, rt, q.getAll('additional_fields')),
+        );
       }
       if (req.method === 'POST' && path === '/api/v2/vehicles/search') {
+        // The search route does not document additional_fields.
         let hits = VEHICLES.map((v, i) => realtime(v, i, rt));
         if (Array.isArray(parsed.license_plates))
           hits = hits.filter((v) =>
@@ -608,25 +639,40 @@ export async function startFake(options: FakeOptions = {}) {
             });
       }
       if (req.method === 'GET' && path === '/api/v2/places')
-        return list(PLACES, 'places');
-      if (req.method === 'GET' && path === '/api/v2/vehicle-groups') {
-        return send(200, {
-          vehicle_groups: [
-            {
-              vehicle_group_id: 1,
-              vehicle_group_name: 'All',
-              icon_id: 0,
-              child_groups: [
-                {
-                  vehicle_group_id: 2,
-                  vehicle_group_name: 'North',
-                  icon_id: 0,
-                  child_groups: [],
-                },
-              ],
-            },
-          ],
-        });
+        return list(
+          options.placeCount
+            ? Array.from({ length: options.placeCount }, (_, i) => ({
+                ...PLACES[i % PLACES.length],
+                place_id: 10000 + i,
+                name: `Site ${i}`,
+              }))
+            : PLACES,
+          'places',
+        );
+      r =
+        req.method === 'GET'
+          ? m(/^\/api\/v2\/vehicle-groups(?:\/(\d+))?$/)
+          : null;
+      if (r) {
+        if (r[1] && !['1', '2'].includes(r[1]))
+          return send(404, {
+            error_code: '404',
+            error_description: 'Group not found',
+          });
+        const tree = structuredClone(ROUND2.vehicle_groups) as Row[];
+        const strip = (nodes: Row[]) => {
+          for (const g of nodes) {
+            if (!q.getAll('additional_fields').includes('license_plates'))
+              delete g.license_plates;
+            strip(g.child_groups as Row[]);
+          }
+        };
+        if (options.groupPlates !== undefined && tree[0])
+          tree[0].license_plates = options.groupPlates;
+        strip(tree);
+        const group =
+          r[1] === '2' ? ((tree[0]?.child_groups ?? []) as Row[])[0] : tree[0];
+        return send(200, r[1] ? group : { vehicle_groups: tree });
       }
       if (req.method === 'GET' && path === '/api/v2/events/stats') {
         return send(200, {
@@ -713,11 +759,30 @@ export async function startFake(options: FakeOptions = {}) {
             )
           : null;
       if (r) {
-        const rows = PLATES.map((p, i) => ({
+        if (options.biPartial && Number(q.get('page_number')) > 1) {
+          req.socket.destroy();
+          return;
+        }
+        const source = options.biPartial
+          ? Array.from({ length: 1001 }, (_, i) => PLATES[i % PLATES.length])
+          : PLATES;
+        const rows = source.map((p, i) => ({
           date: String(parsed.from_date),
           license_plate: p,
           driver_codes: ['105'],
-          distance: 10 * i,
+          ...(r?.[1] === 'periodic'
+            ? {
+                total_distance:
+                  options.biDistance !== undefined
+                    ? options.biDistance
+                    : 10 * i,
+              }
+            : {
+                distance:
+                  options.biDistance !== undefined
+                    ? options.biDistance
+                    : 10 * i,
+              }),
           duration: 'PT1H2M',
           idle_duration: 'PT5M',
         }));
@@ -741,7 +806,11 @@ export async function startFake(options: FakeOptions = {}) {
         }
         return list(rows, r[1] === 'periodic' ? 'periodic' : 'daily');
       }
-      if (req.method === 'POST' && path === '/api/v2/reports/events-report') {
+      if (
+        req.method === 'POST' &&
+        (path === '/api/v2/reports/events-report' ||
+          path === '/api/v2/reports/full-report')
+      ) {
         const plates = (parsed.license_plates ?? []) as string[];
         if (!plates.length || plates.length > 5)
           return send(400, {
@@ -750,15 +819,22 @@ export async function startFake(options: FakeOptions = {}) {
           });
         // Pages of three, whatever was asked, so walks follow the cursor.
         const limit = Math.min(3, Number(parsed.records_limit ?? 1000));
+        const records = Array.isArray(parsed.place_ids)
+          ? RECORDS.filter((r) =>
+              r.places.some((p) =>
+                (parsed.place_ids as number[]).includes(p.id),
+              ),
+            )
+          : RECORDS;
         const start =
           parsed.from_record_id === undefined
             ? 0
-            : RECORDS.findIndex((x) => x.record_id === parsed.from_record_id);
-        const page = RECORDS.slice(start, start + limit);
+            : records.findIndex((x) => x.record_id === parsed.from_record_id);
+        const page = records.slice(start, start + limit);
         const last = page.at(-1)?.record_id;
         // The cursor is inclusive: the next page starts with this page's last row.
         return send(200, {
-          has_more: start + limit < RECORDS.length,
+          has_more: start + limit < records.length,
           last_record_id: last,
           records: page,
         });
@@ -860,6 +936,13 @@ export async function startFake(options: FakeOptions = {}) {
             { id: 2, name: 'Tyres' },
           ],
         });
+      if (
+        options.maintenanceRecords &&
+        req.method === 'GET' &&
+        (path === '/api/v1/maintenance/treatments' ||
+          /^\/api\/v1\/vehicles\/\d+\/maintenance$/.test(path))
+      )
+        return send(200, { treatments: ROUND2.treatments });
       if (req.method === 'GET' && path === '/api/v1/maintenance/treatments')
         return send(404, {
           error_code: '404',

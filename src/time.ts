@@ -191,6 +191,33 @@ export function splitWindow(w: Window, days: number): Window[] {
   return out;
 }
 
+/**
+ * Elapsed whole seconds from an account-local timestamp. Try the zone offsets
+ * on both sides of a possible DST transition, then validate the wall time.
+ * Repeated or nonexistent local times have no unique instant and stay unknown.
+ */
+export function ageSeconds(
+  timestamp: unknown,
+  now: Date,
+  zone: string,
+): number | null {
+  if (typeof timestamp !== 'string') return null;
+  const wall = naiveMs(timestamp);
+  if (wall === null) return null;
+  const offsets = new Set<number>();
+  for (const delta of [-36, 0, 36]) {
+    const sample = wall + delta * 3600_000;
+    offsets.add(
+      (naiveMs(localTime(new Date(sample), zone)) as number) - sample,
+    );
+  }
+  const matches = [...offsets]
+    .map((offset) => wall - offset)
+    .filter((instant) => naiveMs(localTime(new Date(instant), zone)) === wall);
+  if (matches.length !== 1) return null;
+  return Math.floor((now.getTime() - (matches[0] as number)) / 1000);
+}
+
 /** How long ago a naive local time was: "3m", "2h", "5d", or null. */
 export function age(
   timestamp: unknown,

@@ -7,7 +7,7 @@ import type { CommandInput } from '../cli/table.ts';
 import { AxiError } from '../errors.ts';
 import { distanceKm, parsePoint, pointOf, roundKm } from '../geo.ts';
 import { normalizePlate } from '../plates.ts';
-import { age, ageMinutes, parseSpan } from '../time.ts';
+import { age, ageMinutes, ageSeconds, parseSpan } from '../time.ts';
 import {
   account,
   api,
@@ -79,6 +79,7 @@ export function vehicleRow(v: Row, now: Date, zone: string): Row {
     status: str(v.motion_status) ?? null,
     color: str(v.color) ?? null,
     age: age(loc.timestamp, now, zone),
+    age_seconds: ageSeconds(loc.timestamp, now, zone),
     time: str(loc.timestamp) ?? null,
     speed: typeof loc.speed === 'number' ? loc.speed : null,
     limit:
@@ -93,6 +94,16 @@ export function vehicleRow(v: Row, now: Date, zone: string): Row {
         : (str(obj(address).location) ?? null),
     odometer,
     driver: driverName(driver),
+    driver_id: driver.driver_id ?? null,
+    groups: Array.isArray(v.vehicle_groups)
+      ? (v.vehicle_groups as Row[])
+          .map((g) => str(g.name))
+          .filter(Boolean)
+          .join('; ') || null
+      : null,
+    group_ids: Array.isArray(v.vehicle_groups)
+      ? (v.vehicle_groups as Row[]).map((g) => String(g.id)).join(' ') || null
+      : null,
     places: places.length ? places.join('; ') : null,
   };
 }
@@ -108,6 +119,10 @@ const KNOWN = [
   'status',
   'color',
   'age',
+  'age_seconds',
+  'driver_id',
+  'groups',
+  'group_ids',
   'time',
   'speed',
   'limit',
@@ -123,6 +138,7 @@ const KNOWN = [
 export function listPage(
   ctx: Ctx,
   realtime: readonly string[] = [],
+  additional: readonly string[] = [],
 ): FetchPage {
   return async (page_number, page_size) => {
     const json = await ctx.client.read({
@@ -131,6 +147,7 @@ export function listPage(
       query: {
         page_number,
         page_size,
+        ...(additional.length ? { additional_fields: additional } : {}),
         ...(realtime.length ? { realtime_fields: realtime } : {}),
       },
       ctx: { what: 'vehicles' },
@@ -143,10 +160,46 @@ export function listPage(
   };
 }
 
+/** Search has no documented additional_fields; join its rows to the group registry. */
+async function searchGroups(ctx: Ctx, vehicles: Row[]): Promise<Row[]> {
+  if (!vehicles.length) return vehicles;
+  const json = await ctx.client.read({
+    method: 'GET',
+    path: api(ctx, '/vehicle-groups'),
+    query: { additional_fields: ['license_plates'] },
+    ctx: { what: 'vehicle group membership' },
+    emptyOn404: true,
+  });
+  const byPlate = new Map<string, Row[]>();
+  const key = (plate: unknown) => String(plate).replace(/[\s-]+/g, '');
+  const visit = (groups: Row[]) => {
+    for (const g of groups) {
+      const ref = {
+        id: g.vehicle_group_id ?? g.id ?? null,
+        name: g.vehicle_group_name ?? g.name ?? null,
+      };
+      for (const plate of Array.isArray(g.license_plates)
+        ? g.license_plates
+        : []) {
+        const refs = byPlate.get(key(plate)) ?? [];
+        if (!refs.some((r) => r.id === ref.id)) refs.push(ref);
+        byPlate.set(key(plate), refs);
+      }
+      if (Array.isArray(g.child_groups)) visit(g.child_groups as Row[]);
+    }
+  };
+  visit(rowsOf(json, 'vehicle_groups'));
+  return vehicles.map((v) => ({
+    ...v,
+    vehicle_groups: byPlate.get(key(v.license_plate)) ?? [],
+  }));
+}
+
 function searchPage(
   ctx: Ctx,
   body: Row,
   realtime: readonly string[] = [],
+  additional: readonly string[] = [],
 ): FetchPage {
   return async (page_number, page_size) => {
     // No match comes back as 404 404.3, which means an empty list.
@@ -162,8 +215,11 @@ function searchPage(
       ctx: { what: 'matching vehicles' },
       emptyOn404: true,
     });
+    const rows = rowsOf(json, 'vehicles');
     return {
-      rows: rowsOf(json, 'vehicles'),
+      rows: additional.includes('VehicleGroup')
+        ? await searchGroups(ctx, rows)
+        : rows,
       total: json === null ? 0 : totalOf(json),
     };
   };
@@ -180,6 +236,8 @@ export async function vehicles(input: CommandInput): Promise<string> {
   const needsRealtime = columns.some((c) =>
     [
       'age',
+      'age_seconds',
+      'driver_id',
       'time',
       'speed',
       'limit',
@@ -192,30 +250,43 @@ export async function vehicles(input: CommandInput): Promise<string> {
     ].includes(c),
   );
   const realtime = needsRealtime ? REALTIME : [];
+  const additional = columns.some((c) => ['groups', 'group_ids'].includes(c))
+    ? ['VehicleGroup']
+    : [];
   const acc = needsRealtime ? await account(ctx) : null;
   const zone = acc?.zone ?? 'UTC';
   let got: { rows: Row[]; total: number | null };
   let how = '';
   if (!text) {
-    got = await windowRows(listPage(ctx, realtime), page, limit);
+    got = await windowRows(listPage(ctx, realtime, additional), page, limit);
   } else if (/^[\d\s-]+$/.test(text)) {
     const part = text.replace(/[\s-]+/g, '');
     got = await windowRows(
-      searchPage(ctx, { wildcard_filter: { license_plate: part } }, realtime),
+      searchPage(
+        ctx,
+        { wildcard_filter: { license_plate: part } },
+        realtime,
+        additional,
+      ),
       page,
       limit,
     );
     how = ` with ${part} in the plate`;
   } else {
     got = await windowRows(
-      searchPage(ctx, { wildcard_filter: { nickname: text } }, realtime),
+      searchPage(
+        ctx,
+        { wildcard_filter: { nickname: text } },
+        realtime,
+        additional,
+      ),
       page,
       limit,
     );
     how = ` named like "${text}"`;
     if (got.total === 0 && page === 1) {
       // Ituran searches names only; make, model and color are matched here.
-      const all = await walkAll(listPage(ctx, realtime), WALK_PAGE);
+      const all = await walkAll(listPage(ctx, realtime, additional), WALK_PAGE);
       const needle = text.toLowerCase();
       const hits = all.rows.filter((v) =>
         [v.make_name, v.model_name, v.color, v.model_year].some(
@@ -264,7 +335,7 @@ export async function vehicle(input: CommandInput): Promise<string> {
   const v = (await ctx.client.read({
     method: 'GET',
     path: api(ctx, `/vehicles/${plate}`),
-    query: { realtime_fields: REALTIME },
+    query: { realtime_fields: REALTIME, additional_fields: ['VehicleGroup'] },
     ctx: { what: `vehicle ${plate}`, plate },
   })) as Row | null;
   if (!v || typeof v !== 'object')
@@ -284,6 +355,7 @@ export async function vehicle(input: CommandInput): Promise<string> {
       ? {
           time: r.time,
           age: r.age,
+          age_seconds: r.age_seconds,
           speed: r.speed,
           speed_limit: r.limit,
           address: r.address,
@@ -299,6 +371,7 @@ export async function vehicle(input: CommandInput): Promise<string> {
           ...(full ? { phone: driver.phone, cellular: driver.cellular } : {}),
         }
       : 'none assigned now',
+    groups: Array.isArray(v.vehicle_groups) ? v.vehicle_groups : [],
     places: places.length
       ? places.map((p) => str(p.place_name) ?? String(p.place_id ?? ''))
       : 'in no saved place',
@@ -343,19 +416,30 @@ export async function where(input: CommandInput): Promise<string> {
   );
   const staleMin =
     typeof values.stale === 'string' ? parseSpan(values.stale, 'stale') : null;
+  const realtime = columns.some((c) =>
+    ['driver', 'driver_id', 'places'].includes(c),
+  )
+    ? REALTIME
+    : ['LastLocation'];
+  const additional = columns.some((c) => ['groups', 'group_ids'].includes(c))
+    ? ['VehicleGroup']
+    : [];
   let raw: Row[];
   let partial: string | undefined;
   let missing: string[] = [];
   if (plates.length) {
     const unique = [...new Set(plates)];
-    const got = await searchPage(ctx, { license_plates: unique }, [
-      'LastLocation',
-    ])(1, Math.max(10, unique.length));
+    const got = await searchPage(
+      ctx,
+      { license_plates: unique },
+      realtime,
+      additional,
+    )(1, Math.max(10, unique.length));
     raw = got.rows;
     const found = new Set(raw.map((v) => str(v.license_plate)));
     missing = unique.filter((p) => !found.has(p));
   } else {
-    const all = await walkAll(listPage(ctx, ['LastLocation']), WALK_PAGE);
+    const all = await walkAll(listPage(ctx, realtime, additional), WALK_PAGE);
     raw = all.rows;
     partial = all.partial;
   }

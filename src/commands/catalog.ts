@@ -39,6 +39,12 @@ function flattenGroups(
       depth,
       parent,
       subgroups: children.length,
+      vehicles: Array.isArray(g.license_plates)
+        ? new Set(g.license_plates).size
+        : null,
+      plates: Array.isArray(g.license_plates)
+        ? [...new Set(g.license_plates)].join(' ')
+        : null,
     });
     flattenGroups(
       children,
@@ -60,6 +66,7 @@ export async function groups(input: CommandInput): Promise<string> {
       await ctx.client.read({
         method: 'GET',
         path: api(ctx, `/vehicle-groups/${id}`),
+        query: { additional_fields: ['license_plates'] },
         ctx: { what: `vehicle group ${id}` },
       }),
     );
@@ -68,6 +75,10 @@ export async function groups(input: CommandInput): Promise<string> {
   const json = await ctx.client.read({
     method: 'GET',
     path: api(ctx, '/vehicle-groups'),
+    query:
+      input.values.vehicles === true
+        ? { additional_fields: ['license_plates'] }
+        : {},
     ctx: { what: 'vehicle groups' },
     emptyOn404: true,
   });
@@ -79,7 +90,10 @@ export async function groups(input: CommandInput): Promise<string> {
       ? countLine(rows.length, rows.length, 'vehicle group')
       : '0 vehicle groups',
     rows,
-    columns: ['id', 'name', 'depth', 'parent'],
+    columns:
+      input.values.vehicles === true
+        ? ['id', 'name', 'depth', 'vehicles', 'plates']
+        : ['id', 'name', 'depth', 'parent'],
     help: rows.length ? ['Run `ituran-axi groups <id>` for one group'] : [],
     full,
     narrower: 'ituran-axi groups <id>',
@@ -113,9 +127,12 @@ export async function events(input: CommandInput): Promise<string> {
     summary: `${all.length} event states · ${active.length} with vehicles in them now${rows.length < chosen.length ? ` · ${rows.length} shown` : ''}`,
     rows,
     columns: ['id', 'name', 'vehicles'],
-    help: rows.length
-      ? ['Run `ituran-axi event <id>` for the vehicles in one state']
-      : [],
+    help: [
+      ...(rows.length
+        ? ['Run `ituran-axi event <id>` for the vehicles in one state']
+        : []),
+      'Run `ituran-axi report events <plate> --since 24h` for event history; --all here includes empty current states',
+    ],
     full: input.values.full === true,
     narrower: 'ituran-axi events --limit <n>',
   });
