@@ -32,12 +32,22 @@ const answer = (
 });
 
 describe('time', () => {
-  it('keeps exact wall-clock seconds alongside rounded ages', () => {
+  it('keeps elapsed seconds alongside rounded ages', () => {
     assert.equal(ageSeconds('2026-11-08T11:56:43', NOW, ZONE), 197);
     assert.equal(age('2026-11-08T11:56:43', NOW, ZONE), '3m');
     assert.equal(ageSeconds('2026-11-08T12:00:09', NOW, ZONE), -9);
     assert.equal(ageSeconds(null, NOW, ZONE), null);
     assert.equal(ageSeconds('2026-13-01', NOW, ZONE), null);
+  });
+  it('uses the position-time offset across Jerusalem DST changes', () => {
+    assert.equal(ageSeconds('2026-10-24T12:00:00', NOW, ZONE), 1299600);
+    assert.equal(
+      ageSeconds('2026-03-26T12:00:00', new Date('2026-03-28T09:00:00Z'), ZONE),
+      169200,
+    );
+    assert.equal(ageSeconds('2026-10-25T01:30:00', NOW, ZONE), null);
+    assert.equal(ageSeconds('2026-03-27T02:30:00', NOW, ZONE), null);
+    assert.equal(ageSeconds('2026-11-08T15:30:00', NOW, 'Asia/Kolkata'), 0);
   });
   it('maps Windows zone names and falls back to UTC', () => {
     assert.equal(zoneOf('Israel Standard Time'), 'Asia/Jerusalem');

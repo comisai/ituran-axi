@@ -160,6 +160,41 @@ export function listPage(
   };
 }
 
+/** Search has no documented additional_fields; join its rows to the group registry. */
+async function searchGroups(ctx: Ctx, vehicles: Row[]): Promise<Row[]> {
+  if (!vehicles.length) return vehicles;
+  const json = await ctx.client.read({
+    method: 'GET',
+    path: api(ctx, '/vehicle-groups'),
+    query: { additional_fields: ['license_plates'] },
+    ctx: { what: 'vehicle group membership' },
+    emptyOn404: true,
+  });
+  const byPlate = new Map<string, Row[]>();
+  const key = (plate: unknown) => String(plate).replace(/[\s-]+/g, '');
+  const visit = (groups: Row[]) => {
+    for (const g of groups) {
+      const ref = {
+        id: g.vehicle_group_id ?? g.id ?? null,
+        name: g.vehicle_group_name ?? g.name ?? null,
+      };
+      for (const plate of Array.isArray(g.license_plates)
+        ? g.license_plates
+        : []) {
+        const refs = byPlate.get(key(plate)) ?? [];
+        if (!refs.some((r) => r.id === ref.id)) refs.push(ref);
+        byPlate.set(key(plate), refs);
+      }
+      if (Array.isArray(g.child_groups)) visit(g.child_groups as Row[]);
+    }
+  };
+  visit(rowsOf(json, 'vehicle_groups'));
+  return vehicles.map((v) => ({
+    ...v,
+    vehicle_groups: byPlate.get(key(v.license_plate)) ?? [],
+  }));
+}
+
 function searchPage(
   ctx: Ctx,
   body: Row,
@@ -175,14 +210,16 @@ function searchPage(
       query: {
         page_number,
         page_size,
-        ...(additional.length ? { additional_fields: additional } : {}),
         ...(realtime.length ? { realtime_fields: realtime } : {}),
       },
       ctx: { what: 'matching vehicles' },
       emptyOn404: true,
     });
+    const rows = rowsOf(json, 'vehicles');
     return {
-      rows: rowsOf(json, 'vehicles'),
+      rows: additional.includes('VehicleGroup')
+        ? await searchGroups(ctx, rows)
+        : rows,
       total: json === null ? 0 : totalOf(json),
     };
   };

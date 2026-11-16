@@ -283,11 +283,11 @@ export const COMMANDS: readonly Spec[] = [
     flags: {
       vehicles: {
         type: 'boolean',
-        summary: 'Include direct member counts and plates in the group tree',
+        summary: 'Include listed member counts and plates in the group tree',
       },
       full: FULL,
     },
-    summary: 'Vehicle groups, or one group with its direct member plates',
+    summary: 'Vehicle groups, or one group with its listed member plates',
     run: groups,
   },
   {
@@ -364,7 +364,7 @@ export const COMMANDS: readonly Spec[] = [
         type: 'string',
         value: '<id>',
         summary:
-          'Current direct group members; daily, periodic or idle by vehicle, with group km total',
+          'Current listed group plates; daily, periodic or idle by vehicle, with group km total',
       },
       place: {
         type: 'string',
@@ -416,7 +416,7 @@ export const COMMANDS: readonly Spec[] = [
       limit: LIMIT,
       full: FULL,
     },
-    summary: 'Maintenance records with next date and odometer targets',
+    summary: 'Maintenance date, odometer and engine-hours targets',
     run: maintenance,
     service: 'maintenance',
   },

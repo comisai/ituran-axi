@@ -8,11 +8,11 @@ all fields. They are not copied into this public repository. The neutral
 
 | Case | Finding and change | Remaining limit |
 | --- | --- | --- |
-| I01 positions | Client gap: `LastLocation` has a timestamp, `Driver` supplies the current driver, and `additional_fields=VehicleGroup` supplies `vehicle_groups` on vehicle reads. Add `age_seconds`, `driver_id`, `groups` and `group_ids`; request the selected blocks in `where`. Keep existing default columns and rounded `age`. | Ages follow naive account-local wall time. Missing positions stay unknown; offset-free times cannot resolve an ambiguous daylight-saving hour. |
-| I02 group mileage | Client gap: group reads support `additional_fields=license_plates`. Detail now requests membership; `groups --vehicles` shows it in the tree. BI `report --group` filters all fetched rows and sums their distances before displaying a page. | Membership is current and direct, not historical or inherited. No native group mileage route is established by the reference; totals are derived locally. Overlapping groups must not be added as a fleet total. Missing member report rows or distances leave `group_km` unknown; coverage counts distinguish that from an empty group. |
+| I01 positions | Client gap: `LastLocation` has a timestamp, `Driver` supplies the current driver, and `additional_fields=VehicleGroup` supplies `vehicle_groups` on vehicle reads. Add `age_seconds`, `driver_id`, `groups` and `group_ids`; request the selected blocks in `where`. Search results join the documented group registry, because POST `/vehicles/search` does not document `additional_fields`. Keep existing default columns and rounded `age`. | Second-level ages use the account zone at the position time, so elapsed seconds handle DST changes. Repeated fall-back and nonexistent spring-forward times stay unknown. The existing rounded age display is unchanged. |
+| I02 group mileage | Client gap: group reads support `additional_fields=license_plates`. Detail now requests membership; `groups --vehicles` shows it in the tree. BI `report --group` filters all fetched rows and sums their distances before displaying a page. | Membership uses the group's current plate list, without merging child-group lists. Whether a parent list includes descendants is unverified until a live run; these reads cannot recover historical membership. No native group mileage route is established by the reference; totals are derived locally. Overlapping groups must not be added as a fleet total. Missing member report rows or distances leave `group_km` unknown; coverage counts distinguish that from an empty group. |
 | I04 place history | Client gap: the existing events/full report POSTs support `place_ids` and return dated `places` identities. Add `--place` to those reports. | These are event records, not a guaranteed complete sequence of entry/exit intervals. An absence of records does not establish no visit. Explicit vehicle plates are still required by operational reports. |
 | I04 partial place list | No paging defect reproduced: a 1,265-place fake verifies indexed lookup of the last place and page 7 of a 200-row listing. | The default table is bounded and a listing page remains a partial view. Use name search or follow the next-page hints; `--full` lifts size bounds, not row limits. |
-| I05 maintenance | Client gap: treatment rows carry nested `next.date` and `next.odometer`, flattened already but omitted by the default column cut. Preserve the existing columns and append those targets. Count `without_due_target`. | The API can omit targets or return stale/inconsistent schedules; no due date is invented and no missing target is treated as overdue. Maintenance V1 has no standalone swagger. |
+| I05 maintenance | Client gap: treatment rows carry nested `next.date`, `next.odometer` and `next.engine_hours`, flattened already but omitted by the default column cut. Preserve the existing columns and append those targets. Count only records lacking date, positive odometer and positive engine-hours targets in `without_due_target`. | The API can omit targets or return stale/inconsistent schedules; no due date is invented and no missing target is treated as overdue. Maintenance V1 has no standalone swagger. |
 | I05 diagnostics | Client gap: reads walk vehicle pages, but the displayed readings had no way past the first `--limit`. Add `--page` and next-page hints. | Each channel is sampled at its own time and may be old or absent. Output completeness does not establish current fleet health. |
 | R2-13 event history | Guidance gap: `events --all` correctly reads current state statistics. Add an unconditional hint to `report events`, including empty-state output and help text. | State statistics are not historical events. |
 | R2-13 speed | The missing `--over` message already existed; validate it before reading the account and test the explicit hint. Help marks it required for speed reports. | The API needs a speed threshold. |
@@ -28,10 +28,17 @@ the operation-identical v2 service this client already uses.
 
 All network changes are query/body fields on existing reads:
 
-- GET `/api/v2/vehicles`, GET `/api/v2/vehicles/{plate}` and POST `/api/v2/vehicles/search`.
+- GET `/api/v2/vehicles`, GET `/api/v2/vehicles/{plate}` and POST `/api/v2/vehicles/search` (realtime fields only; group references are joined from the registry).
 - GET `/api/v2/vehicle-groups` and GET `/api/v2/vehicle-groups/{id}`.
 - POST `/api/v2/reports/events-report` and POST `/api/v2/reports/full-report`.
 - Existing BI and Maintenance/Treatments reads retain their methods and routes.
+
+The BI routes have no supplied swagger. The conservative mileage rule requires a
+row for every listed member and numeric distance on every matching row. Whether
+BI omits stationary vehicles, whether idle rows include distance, and whether a
+parent's membership includes child groups remain unverified assumptions until a
+live run. The new GET vehicle group field also needs live qualification against
+account permissions before release. No live calls are made in this task.
 
 There are no new methods/routes for the Comis Gate allowlist. A release would
 need the Comis apps pack version updated and its `ituran-read` skill taught the

@@ -253,7 +253,7 @@ async function biReport(
             group_unreported_vehicles: plates.length - reported.size,
             group_km: groupKm,
             membership:
-              'Current direct members only; child groups excluded. Membership is not historical.',
+              'Current plates listed by Ituran for this group; child-group lists are not merged. Inclusion of descendants is unverified. Membership is not historical.',
           }
         : {}),
       ...(partial ? { partial } : {}),

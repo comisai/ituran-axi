@@ -23,6 +23,8 @@ it('returns second-level position age and current driver/group references', asyn
     ['where', '12345678'],
     ['where', '--all'],
     ['vehicles'],
+    ['vehicles', '1234'],
+    ['vehicles', 'Van 0'],
   ]) {
     const out = await ok(
       ...args,
@@ -114,6 +116,8 @@ it('exposes maintenance targets and states when a record has none', async () => 
   assert.equal(rows[0]?.['next.date'], '2026-12-01');
   assert.equal(rows[0]?.['next.odometer'], 20000);
   assert.equal(rows[1]?.['next.date'], null);
+  assert.equal(rows[1]?.['next.odometer'], 0);
+  assert.equal(rows[2]?.['next.engine_hours'], 500);
   assert.equal(out.without_due_target, 1);
 });
 it('explains current event states and the required speed threshold', async () => {
@@ -193,4 +197,83 @@ it('does not turn a missing group member report into zero mileage', async () => 
   } finally {
     server.close();
   }
+});
+
+it('uses documented reads for group references on search results', async () => {
+  const start = fake.state.requests.length;
+  await ok('where', '12345678', '--fields', 'plate,groups');
+  const requests = fake.state.requests.slice(start);
+  const search = requests.find((r) => r.path === '/api/v2/vehicles/search');
+  assert.ok(search);
+  assert.equal(
+    new URLSearchParams(search.query).has('additional_fields'),
+    false,
+  );
+  assert.ok(
+    requests.some(
+      (r) =>
+        r.method === 'GET' &&
+        (r.path === '/api/v2/vehicle-groups' ||
+          r.path === '/api/v2/vehicles/12345678'),
+    ),
+  );
+});
+it('leaves group mileage unknown after a partial BI walk', async () => {
+  const server = await startFake({ biPartial: true });
+  try {
+    const result = await runBinary(
+      ['report', 'periodic', '--group', '1', '--date', '2026-11-07'],
+      fakeEnv(server.url),
+    );
+    assert.equal(result.code, 0, result.stdout);
+    const out = decode(result.stdout) as Row;
+    assert.equal(out.group_reported_vehicles, 2);
+    assert.equal(out.group_km, null);
+    assert.match(String(out.partial), /stopped after 1000 rows/);
+  } finally {
+    server.close();
+  }
+});
+it('rejects null and non-numeric distances as group mileage', async () => {
+  for (const distance of [null, 'unknown']) {
+    const server = await startFake({ biDistance: distance });
+    try {
+      const result = await runBinary(
+        ['report', 'periodic', '--group', '1', '--date', '2026-11-07'],
+        fakeEnv(server.url),
+      );
+      assert.equal(result.code, 0, result.stdout);
+      const out = decode(result.stdout) as Row;
+      assert.equal(out.group_reported_vehicles, 2);
+      assert.equal(out.group_km, null);
+    } finally {
+      server.close();
+    }
+  }
+});
+it('counts diagnostics remaining after page two in the next-page hint', async () => {
+  const second = await ok(
+    'diagnostics',
+    '--all',
+    '--limit',
+    '4',
+    '--page',
+    '2',
+    '--full',
+  );
+  assert.match(
+    JSON.stringify(second.help),
+    /--page 3 --limit 4 for the next 1 readings/,
+  );
+  const third = await ok(
+    'diagnostics',
+    '--all',
+    '--limit',
+    '4',
+    '--page',
+    '3',
+    '--full',
+  );
+  assert.equal((third.readings as Row[]).length, 1);
+  assert.equal(third.help, undefined);
 });

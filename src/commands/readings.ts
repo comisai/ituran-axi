@@ -219,9 +219,14 @@ export async function maintenance(input: CommandInput): Promise<string> {
       without_due_target: all.filter(
         (r) =>
           !r['next.date'] &&
-          !(typeof r['next.odometer'] === 'number' && r['next.odometer'] > 0),
+          !['next.odometer', 'next.engine_hours'].some(
+            (key) =>
+              typeof r[key] === 'number' &&
+              Number.isFinite(r[key]) &&
+              r[key] > 0,
+          ),
       ).length,
-      note: 'Due targets are next.date and next.odometer. Missing targets do not mean overdue; verify stale or inconsistent schedules before planning service.',
+      note: 'Due targets are next.date, next.odometer and next.engine_hours. Missing targets do not mean overdue; verify stale or inconsistent schedules before planning service.',
     },
     rows: all.slice(0, limit),
     columns: [
@@ -234,7 +239,7 @@ export async function maintenance(input: CommandInput): Promise<string> {
           'odometer',
           'next',
         ]),
-        ...['next.date', 'next.odometer'].filter((k) =>
+        ...['next.date', 'next.odometer', 'next.engine_hours'].filter((k) =>
           all.some((r) => k in r),
         ),
       ]),

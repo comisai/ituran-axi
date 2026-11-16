@@ -43,6 +43,10 @@ export interface FakeOptions {
   groupPlates?: string[] | null;
   /** Exercise paging beyond the fleet-manager place-list sample. */
   placeCount?: number;
+  /** Fail after the first full BI page. */
+  biPartial?: boolean;
+  /** Override BI distance with malformed/missing upstream data. */
+  biDistance?: unknown;
   port?: number;
 }
 
@@ -467,9 +471,8 @@ export async function startFake(options: FakeOptions = {}) {
         );
       }
       if (req.method === 'POST' && path === '/api/v2/vehicles/search') {
-        let hits = VEHICLES.map((v, i) =>
-          realtime(v, i, rt, q.getAll('additional_fields')),
-        );
+        // The search route does not document additional_fields.
+        let hits = VEHICLES.map((v, i) => realtime(v, i, rt));
         if (Array.isArray(parsed.license_plates))
           hits = hits.filter((v) =>
             (parsed.license_plates as string[]).includes(
@@ -756,13 +759,30 @@ export async function startFake(options: FakeOptions = {}) {
             )
           : null;
       if (r) {
-        const rows = PLATES.map((p, i) => ({
+        if (options.biPartial && Number(q.get('page_number')) > 1) {
+          req.socket.destroy();
+          return;
+        }
+        const source = options.biPartial
+          ? Array.from({ length: 1001 }, (_, i) => PLATES[i % PLATES.length])
+          : PLATES;
+        const rows = source.map((p, i) => ({
           date: String(parsed.from_date),
           license_plate: p,
           driver_codes: ['105'],
           ...(r?.[1] === 'periodic'
-            ? { total_distance: 10 * i }
-            : { distance: 10 * i }),
+            ? {
+                total_distance:
+                  options.biDistance !== undefined
+                    ? options.biDistance
+                    : 10 * i,
+              }
+            : {
+                distance:
+                  options.biDistance !== undefined
+                    ? options.biDistance
+                    : 10 * i,
+              }),
           duration: 'PT1H2M',
           idle_duration: 'PT5M',
         }));

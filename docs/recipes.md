@@ -81,9 +81,10 @@ ituran-axi event <id>
 ```sh
 ituran-axi where --all --fields plate,time,age,age_seconds,driver_id,group_ids --limit 2000 --full
 ```
-`age` stays rounded for display; `age_seconds` is signed wall-clock seconds in the
-account zone. Keep the timestamp and zone when comparing reads. An offset-free
-upstream timestamp cannot distinguish the two occurrences of a daylight-saving hour.
+`age` retains its rounded wall-clock display; `age_seconds` measures elapsed
+seconds using the account zone at the position time, including DST changes.
+Repeated fall-back times and nonexistent spring-forward times return `null`.
+Keep the timestamp and zone when comparing reads.
 
 **Mileage for a vehicle group yesterday**
 ```sh
@@ -92,11 +93,13 @@ ituran-axi groups <id> --full
 ituran-axi report periodic --group <id> --date <YYYY-MM-DD> --limit 1000 --full
 ```
 Read `group_km` for the total across every matching BI row, even if the displayed
-rows need another page. Member plates are deduplicated. The group uses current,
-direct membership; child groups and historical membership are excluded. Do not
+rows need another page. Member plates are deduplicated. The group uses the plates
+Ituran currently lists for it; child-group lists are not merged. Whether a parent already includes descendants is unverified until a
+live run, and these reads cannot recover historical membership. Do not
 sum overlapping groups as a fleet total. A `partial` field or `group_km: null`
 means the group mileage could not be completed. Check `group_unreported_vehicles`;
-a missing BI row is not evidence of zero mileage.
+a missing BI row is not evidence of zero mileage. BI row coverage for stationary
+vehicles and distance availability in idle rows remain unverified until a live run.
 
 **Dated records at a saved place**
 ```sh
@@ -124,8 +127,9 @@ ituran-axi maintenance <plate> --limit 2000 --full
 ituran-axi diagnostics --all --limit 2000 --page 1 --full
 ituran-axi diagnostics --all --limit 2000 --page 2 --full
 ```
-Maintenance includes `next.date` and `next.odometer` when the API sends them;
-`without_due_target` records cannot be classified as overdue. Check schedule and
+Maintenance includes `next.date`, `next.odometer` and `next.engine_hours` when
+the API sends them. `without_due_target` records cannot be classified as overdue. Check schedule and
 meter consistency before classifying service needs. Diagnostic summaries count
 all fetched readings, while the table is one page. Follow its next-page hint and
-check each reading's age; an old sample is not a current health assessment.
+check each reading's age. Pages re-read current data and can shift between calls.
+An old sample is not a current health assessment.
