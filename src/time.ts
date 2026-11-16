@@ -106,6 +106,8 @@ export interface Window {
   /** Naive local, or date-only when the route takes dates. */
   from: string;
   to: string;
+  /** The end asked for, when Ituran cannot answer up to it and `to` is earlier. */
+  asked?: string;
 }
 
 /** Ituran refuses windows that end in the future; this keeps a safe margin. */
@@ -164,12 +166,49 @@ export function windowOf(
     from = naiveFromMs(nowMs - minutes * 60_000);
     to = latest;
   }
-  if ((naiveMs(to) as number) > nowMs - NOW_MARGIN_MIN * 60_000) to = latest;
+  // An end given with --to or --date that Ituran cannot answer up to yet is
+  // cut to now; the window says so.
+  let asked: string | undefined;
+  if ((naiveMs(to) as number) > nowMs - NOW_MARGIN_MIN * 60_000) {
+    if (flags.to || flags.date) asked = to;
+    to = latest;
+  }
   if ((naiveMs(from) as number) > (naiveMs(to) as number)) {
     throw usage('The window starts after it ends, or lies in the future.');
   }
-  if (form === 'date') return { from: from.slice(0, 10), to: to.slice(0, 10) };
-  return { from, to };
+  if (form === 'date') {
+    const day = to.slice(0, 10);
+    return {
+      from: from.slice(0, 10),
+      to: day,
+      ...(asked && asked.slice(0, 10) !== day
+        ? { asked: asked.slice(0, 10) }
+        : {}),
+    };
+  }
+  return { from, to, ...(asked ? { asked } : {}) };
+}
+
+/** A list head's `clamped` line, when the window ends earlier than asked. */
+export function clamped(w: Window): { clamped?: string } {
+  if (!w.asked) return {};
+  return {
+    clamped: /T/.test(w.to)
+      ? `the end asked, ${w.asked}, is in the future or less than ${NOW_MARGIN_MIN} minutes ago; Ituran answers only up to ${NOW_MARGIN_MIN} minutes ago, so the window ends ${w.to}`
+      : `the end asked, ${w.asked}, is in the future; the window ends today, ${w.to}, and covers today up to now`,
+  };
+}
+
+/**
+ * Where a naive local time lies against a window, to the whole second:
+ * 'before', 'after', or null when inside it or not a time.
+ */
+export function outside(time: unknown, w: Window): 'before' | 'after' | null {
+  const at = typeof time === 'string' ? naiveMs(time) : null;
+  if (at === null) return null;
+  if (at < (naiveMs(w.from) as number)) return 'before';
+  const end = naiveMs(/T/.test(w.to) ? w.to : `${w.to}T23:59:59`) as number;
+  return at > end ? 'after' : null;
 }
 
 /**

@@ -6,7 +6,14 @@
 import type { CommandInput } from '../cli/table.ts';
 import { AxiError, usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
-import { hoursMinutes, naiveMs, windowOf, yesterday } from '../time.ts';
+import {
+  clamped,
+  hoursMinutes,
+  naiveMs,
+  outside,
+  windowOf,
+  yesterday,
+} from '../time.ts';
 import { pickColumns } from './catalog.ts';
 import {
   account,
@@ -18,6 +25,7 @@ import {
   listOutput,
   MAX_PAGE,
   open,
+  plural,
   type Row,
   rowsOf,
   str,
@@ -244,6 +252,7 @@ async function biReport(
     summary: `${rows.length ? countLine(rows.length, total, 'row') : '0 rows'} of the ${name} report by ${by.slice(0, -1)}`,
     head: {
       window: `${w.from} to ${w.to} (whole days)`,
+      ...clamped(w),
       ...(group
         ? {
             group: values.group,
@@ -339,7 +348,7 @@ async function operational(
     return listOutput({
       key: 'points',
       summary: `${rows.length} heat-map points for ${plates[0]}; points are not in time order`,
-      head: { window: `${w.from} to ${w.to}`, zone },
+      head: { window: `${w.from} to ${w.to}`, ...clamped(w), zone },
       rows: rows.slice(0, limit),
       columns: headers.slice(0, 5),
       help:
@@ -357,6 +366,8 @@ async function operational(
     throw usage('report speed needs --over <km/h>, the speed to report above.');
   const rows: Row[] = [];
   const seen = new Set<string>();
+  // Records Ituran sent that lie outside the window, by side; never listed.
+  const strays = { before: 0, after: 0 };
   let more = false;
   outer: for (let i = 0; i < plates.length; i += MAX_PLATES) {
     const chunk = plates.slice(i, i + MAX_PLATES);
@@ -395,7 +406,9 @@ async function operational(
           const key = String(r.record_id ?? JSON.stringify(r));
           if (seen.has(key)) continue;
           seen.add(key);
-          rows.push(recordRow(r));
+          const side = outside(r.timestamp, w);
+          if (side) strays[side]++;
+          else rows.push(recordRow(r));
         }
         if (rows.length >= limit) {
           more = json.has_more === true || rows.length > limit;
@@ -417,7 +430,13 @@ async function operational(
     summary: `${shown.length} records of the ${name} report for ${plates.join(' ')}${more ? ', more exist' : ''}`,
     head: {
       window: `${w.from} to ${w.to}`,
+      ...clamped(w),
       zone,
+      ...(strays.before + strays.after
+        ? {
+            left_out: `${plural(strays.before + strays.after, 'record')} Ituran sent ${strays.before + strays.after === 1 ? 'lies' : 'lie'} ${strays.before && strays.after ? `outside the window (${strays.before} before, ${strays.after} after)` : strays.before ? 'before the window' : 'after the window'}; not listed`,
+          }
+        : {}),
       ...(values.place !== undefined
         ? {
             place_id: values.place,
@@ -513,7 +532,7 @@ export async function safety(input: CommandInput): Promise<string> {
       ? { period_type: values.by === 'month' ? 'monthly' : 'daily' }
       : {}),
   };
-  const head = { window: `${w.from} to ${w.to} (whole days)` };
+  const head = { window: `${w.from} to ${w.to} (whole days)`, ...clamped(w) };
   if (view === 'totals') {
     const json = obj(
       await ctx.client.read({

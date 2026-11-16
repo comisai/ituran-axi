@@ -66,7 +66,7 @@ const WINDOW: Record<string, FlagSpec> = {
   to: {
     type: 'string',
     value: '<time>',
-    summary: 'Until this time; default now',
+    summary: 'Until this time; default now, and at most now',
   },
   date: { type: 'string', value: '<YYYY-MM-DD>', summary: 'One local day' },
 };
@@ -167,7 +167,7 @@ export const COMMANDS: readonly Spec[] = [
       page: PAGE,
       full: FULL,
     },
-    summary: 'Trips, default 24h, at most 56 days',
+    summary: 'Trips by end time, default 24h, at most 56 days',
     run: trips,
   },
   {

@@ -10,8 +10,10 @@ import { normalizePlate } from '../../src/plates.ts';
 import {
   age,
   ageSeconds,
+  clamped,
   hoursMinutes,
   localTime,
+  outside,
   splitWindow,
   windowOf,
   zoneOf,
@@ -71,12 +73,43 @@ describe('time', () => {
     );
     assert.deepEqual(
       windowOf({ from: '2026-11-07', to: '2026-12-01' }, ZONE, NOW, '7d'),
-      { from: '2026-11-07T00:00:00', to: '2026-11-08T11:58:00' },
+      {
+        from: '2026-11-07T00:00:00',
+        to: '2026-11-08T11:58:00',
+        asked: '2026-12-01T23:59:59',
+      },
     );
     // Today is clamped to now, and date-only routes get dates.
     assert.deepEqual(
       windowOf({ date: '2026-11-08' }, ZONE, NOW, '7d', 'date'),
       { from: '2026-11-08', to: '2026-11-08' },
+    );
+    assert.deepEqual(
+      windowOf(
+        { from: '2026-11-01', to: '2026-11-09' },
+        ZONE,
+        NOW,
+        '7d',
+        'date',
+      ),
+      { from: '2026-11-01', to: '2026-11-08', asked: '2026-11-09' },
+    );
+    // A window cut at now says so; one that ends now by default does not.
+    assert.match(
+      String(
+        clamped(windowOf({ date: '2026-11-08' }, ZONE, NOW, '7d')).clamped,
+      ),
+      /2026-11-08T23:59:59, is in the future.*ends 2026-11-08T11:58:00$/,
+    );
+    assert.deepEqual(clamped(windowOf({ since: '1h' }, ZONE, NOW, '7d')), {});
+    const day = { from: '2026-11-07T00:00:00', to: '2026-11-07T23:59:59' };
+    assert.equal(outside('2026-11-06T23:59:59.999', day), 'before');
+    assert.equal(outside('2026-11-07T23:59:59.883', day), null);
+    assert.equal(outside('2026-11-08T00:00:00', day), 'after');
+    assert.equal(outside(undefined, day), null);
+    assert.equal(
+      outside('2026-11-08T00:00:00', { from: '2026-11-07', to: '2026-11-07' }),
+      'after',
     );
     assert.deepEqual(windowOf({}, ZONE, NOW, '7d', 'date'), {
       from: '2026-11-01',

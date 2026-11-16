@@ -51,6 +51,13 @@ export interface FakeOptions {
   biDistance?: unknown;
   /** Transport faults, without contacting Ituran. */
   stall?: 'headers' | 'body' | 'stream';
+  /**
+   * One vehicle is driving now. Ituran lists the trip under way with a
+   * provisional end at the moment of the request, even past to_date, as
+   * production did on 2026-11-16; the event reports add a record stamped at
+   * that moment too.
+   */
+  liveTrip?: boolean;
   /** Delay every answer to expose overlapping processes. */
   answerDelayMs?: number;
   /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
@@ -248,6 +255,26 @@ const TRIPS = [
     ),
   ),
 ];
+
+/** The vehicle that drives now when the fake runs with liveTrip. */
+export const DRIVING = PLATES[3] as string;
+
+/** Two trips of DRIVING, by the real clock: one ended earlier, one under way. */
+function liveTrips(): Row[] {
+  const done = trip(9100, DRIVING, '', 0);
+  const under = trip(9101, DRIVING, '', 0);
+  const at = (t: Row, side: string, time: string) => {
+    (t[side] as Row).timestamp = time;
+  };
+  at(done, 'start_location', localNow(3 * 3_600_000));
+  at(done, 'end_location', localNow(2.5 * 3_600_000));
+  done.distance = 40;
+  at(under, 'start_location', localNow(25 * 60_000));
+  at(under, 'end_location', `${localNow()}.883`);
+  under.distance = 23;
+  under.trip_status = 'trip_start';
+  return [done, under];
+}
 
 /** Account-wide trips over more than this many days fail, as production's do. */
 const TRIPS_ACCOUNT_DAYS = 8;
@@ -538,11 +565,18 @@ export async function startFake(options: FakeOptions = {}) {
             error_code: '500',
             error_description: 'Internal server error',
           });
-        const hits = TRIPS.filter(
-          (t) =>
-            (!plates.length || plates.includes(String(t.license_plate))) &&
-            String((t.end_location as Row).timestamp) >= from &&
-            String((t.end_location as Row).timestamp) <= to,
+        const ends = (t: Row) => String((t.end_location as Row).timestamp);
+        const starts = (t: Row) => String((t.start_location as Row).timestamp);
+        const hits = [
+          ...TRIPS.filter((t) => ends(t) >= from && ends(t) <= to),
+          // A trip under way is listed while it overlaps the window.
+          ...(options.liveTrip ? liveTrips() : []).filter((t) =>
+            t.trip_status === 'trip_start'
+              ? starts(t) <= to && ends(t) >= from
+              : ends(t) >= from && ends(t) <= to,
+          ),
+        ].filter(
+          (t) => !plates.length || plates.includes(String(t.license_plate)),
         );
         if (!hits.length)
           return send(404, {
@@ -849,13 +883,20 @@ export async function startFake(options: FakeOptions = {}) {
           });
         // Pages of three, whatever was asked, so walks follow the cursor.
         const limit = Math.min(3, Number(parsed.records_limit ?? 1000));
-        const records = Array.isArray(parsed.place_ids)
-          ? RECORDS.filter((r) =>
-              r.places.some((p) =>
-                (parsed.place_ids as number[]).includes(p.id),
-              ),
-            )
-          : RECORDS;
+        const from = String(parsed.from_date);
+        const to = String(parsed.to_date);
+        const records = [
+          ...RECORDS.filter((r) => r.timestamp >= from && r.timestamp <= to),
+          ...(options.liveTrip
+            ? [{ ...RECORDS[1], record_id: 9100, timestamp: localNow() }]
+            : []),
+        ].filter(
+          (r) =>
+            !Array.isArray(parsed.place_ids) ||
+            r.places?.some((p) =>
+              (parsed.place_ids as number[]).includes(p.id),
+            ),
+        );
         const start =
           parsed.from_record_id === undefined
             ? 0
