@@ -43,6 +43,8 @@ export interface FakeOptions {
   groupPlates?: string[] | null;
   /** Exercise paging beyond the fleet-manager place-list sample. */
   placeCount?: number;
+  /** Give every generated place this description, for large output. */
+  placeDescription?: string;
   /** Fail after the first full BI page. */
   biPartial?: boolean;
   /** Override BI distance with malformed/missing upstream data. */
@@ -670,6 +672,9 @@ export async function startFake(options: FakeOptions = {}) {
                 ...PLACES[i % PLACES.length],
                 place_id: 10000 + i,
                 name: `Site ${i}`,
+                ...(options.placeDescription
+                  ? { description: options.placeDescription }
+                  : {}),
               }))
             : PLACES,
           'places',

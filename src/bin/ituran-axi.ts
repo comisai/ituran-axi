@@ -21,4 +21,7 @@ const code = await main(process.argv.slice(2), {
 // after fetch has aborted. This is a one-command process: once cleanup has
 // finished and stdout has drained, exit to release the dispatcher and sockets.
 // Setting only exitCode leaves that socket holding the process open.
-process.stdout.end(() => process.exit(code));
+// Never end stdout: it may be a socket the caller's shell also writes to, and
+// ending a socket shuts down writing for every process that shares it. An
+// empty write's callback runs only after every earlier write has flushed.
+process.stdout.write('', () => process.exit(code));
