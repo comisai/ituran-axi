@@ -1,15 +1,20 @@
 // trips, trip and totals. Ituran matches a trip to a window by its end time,
 // and lists a trip only some hours after it ends; the output says so when it
-// matters. Totals for the whole account take dates, not times.
+// matters. Ituran can also list a trip still under way, with a provisional end
+// past the window: trips keeps only the trips that end inside the window it
+// prints, and says how many it left out. Totals for the whole account take
+// dates, not times.
 
 import type { Account } from '../account.ts';
 import type { CommandInput } from '../cli/table.ts';
 import { AxiError, usage } from '../errors.ts';
 import { normalizePlate } from '../plates.ts';
 import {
+  clamped,
   hoursMinutes,
   localTime,
   naiveMs,
+  outside,
   splitWindow,
   type Window,
   windowOf,
@@ -27,6 +32,7 @@ import {
   listOutput,
   MAX_PAGE,
   open,
+  plural,
   type Row,
   recordOutput,
   rowsOf,
@@ -46,6 +52,24 @@ export const TRIP_SPAN_DAYS = 7;
 const MAX_TRIP_DAYS = 56;
 const LATE_NOTE =
   'Ituran matches trips by their end time and lists a trip up to a few hours after it ends.';
+const MATCHED = 'by trip end time: a trip belongs to the window it ends in';
+
+const endOf = (t: Row) => obj(t.end_location).timestamp;
+
+/**
+ * The head's `left_out` line for trips Ituran listed that end outside the
+ * window, such as a trip still under way whose provisional end is now.
+ */
+function leftOut(strays: Row[]): { left_out?: string } {
+  if (!strays.length) return {};
+  const named = strays
+    .slice(0, 3)
+    .map((t) => `${String(t.trip_id ?? 'no id')} ends ${String(endOf(t))}`)
+    .join(', ');
+  return {
+    left_out: `${plural(strays.length, 'trip')} Ituran listed ${strays.length === 1 ? 'ends' : 'end'} outside the window (${named}${strays.length > 3 ? ', ...' : ''}); one that ends after it may still be under way. Not in the rows and not counted.`,
+  };
+}
 
 function windowFlags(values: CommandInput['values']) {
   return {
@@ -189,8 +213,9 @@ export async function trips(input: CommandInput): Promise<string> {
     tripPages(ctx, plates, span),
   );
   const got = await joinedRows(lists, page, limit);
-  const rows = got.rows.map(tripRow);
-  const total = got.total;
+  const strays = got.rows.filter((t) => outside(endOf(t), w));
+  const rows = got.rows.filter((t) => !outside(endOf(t), w)).map(tripRow);
+  const total = got.total === null ? null : got.total - strays.length;
   const whose = plates.length ? `for ${plates.join(' ')}` : 'for all vehicles';
   const nowLocal = naiveMs(localTime(ctx.now, acc.zone)) as number;
   const recent = nowLocal - (naiveMs(w.to) as number) < RECENT_HOURS * 3600_000;
@@ -202,9 +227,10 @@ export async function trips(input: CommandInput): Promise<string> {
       ) / 10
     : null;
   const summary = `${rows.length ? countLine(rows.length, total, 'trip') : '0 trips'} ${whose}${km !== null && rows.length ? ` · ${km} km` : ''}`;
-  const shownTo = (page - 1) * limit + rows.length;
+  // Pages count Ituran's rows, those left out included.
+  const shownTo = (page - 1) * limit + got.rows.length;
   const help: string[] = [];
-  if (total !== null && shownTo < total) {
+  if (got.total !== null && shownTo < got.total) {
     const args = [
       ...plates,
       ...flagWords(values),
@@ -213,7 +239,7 @@ export async function trips(input: CommandInput): Promise<string> {
       ...(limit !== 20 ? ['--limit', String(limit)] : []),
     ];
     help.push(
-      `Run \`ituran-axi trips ${args.join(' ')}\` for the next ${Math.min(limit, total - shownTo)}`,
+      `Run \`ituran-axi trips ${args.join(' ')}\` for the next ${Math.min(limit, got.total - shownTo)}`,
     );
   }
   if (rows.length)
@@ -229,7 +255,10 @@ export async function trips(input: CommandInput): Promise<string> {
     summary,
     head: {
       window: `${w.from} to ${w.to}`,
+      matched: MATCHED,
+      ...clamped(w),
       zone: acc.zone,
+      ...leftOut(strays),
       ...(recent || !rows.length ? { note: LATE_NOTE } : {}),
     },
     rows,
@@ -309,6 +338,7 @@ async function tripsByPlate(
     if (!tally.has(key(plate))) tally.set(key(plate), fresh(plate));
   // A trip on a week's or a page's edge can come twice; it counts once.
   const seen = new Set<unknown>();
+  const strays: Row[] = [];
   let tripCount = 0;
   for (const t of walks.flatMap((walk) => walk.rows)) {
     const plate = str(t.license_plate);
@@ -316,6 +346,10 @@ async function tripsByPlate(
     if (t.trip_id !== undefined && t.trip_id !== null) {
       if (seen.has(t.trip_id)) continue;
       seen.add(t.trip_id);
+    }
+    if (outside(endOf(t), w)) {
+      strays.push(t);
+      continue;
     }
     tripCount++;
     const a = tally.get(key(plate)) ?? fresh(plate);
@@ -372,7 +406,10 @@ async function tripsByPlate(
     summary,
     head: {
       window: `${w.from} to ${w.to}`,
+      matched: MATCHED,
+      ...clamped(w),
       zone: acc.zone,
+      ...leftOut(strays),
       ...(partial ? { partial: `trips ${partial}; the totals are low` } : {}),
       ...(recent ? { note: LATE_NOTE } : {}),
     },
@@ -514,6 +551,7 @@ export async function totals(input: CommandInput): Promise<string> {
     return recordOutput(
       {
         window: `${w.from} to ${w.to} (whole days)`,
+        ...clamped(w),
         trips: t.trips_count,
         vehicles: t.vehicles_count,
         drivers: t.drivers_count,
@@ -548,6 +586,7 @@ export async function totals(input: CommandInput): Promise<string> {
     {
       plate,
       window: `${w.from} to ${w.to}`,
+      ...clamped(w),
       trips: t.trips_count,
       km: round1(t.distance),
       driving: hoursMinutes(t.duration),
@@ -561,6 +600,12 @@ export async function totals(input: CommandInput): Promise<string> {
         driving: hoursMinutes(p.duration),
       })),
       zone: acc.zone,
+      note:
+        (naiveMs(localTime(ctx.now, acc.zone)) as number) -
+          (naiveMs(w.to) as number) <
+        RECENT_HOURS * 3600_000
+          ? "Ituran's own totals, not checked trip by trip: a trip still under way may count here while `trips` leaves it out."
+          : undefined,
     },
     values.full === true,
     `ituran-axi totals ${plate} --since 24h`,

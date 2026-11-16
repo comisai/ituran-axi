@@ -75,7 +75,7 @@ Position fields include `age_seconds` alongside the rounded `age`, plus `driver_
 
 `maintenance` preserves its existing columns and adds `next.date`, `next.odometer` and `next.engine_hours` when present. `without_due_target` counts records with no date or positive odometer/engine-hours target. Missing targets do not mean overdue. `diagnostics --page N --limit N` pages the readings after all vehicle pages have been read; each reading retains its own age. Pages re-read current data and can shift between calls. `--full` lifts output size bounds, while `--limit` and `--page` still control rows.
 
-A **window** is `--since 90m|24h|7d`, `--from <t> [--to <t>]`, or `--date YYYY-MM-DD`. Times are local to the account's time zone, which the home view shows, and take the form `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. **Lists** take `--limit`, `--page`, `--fields` and `--full`.
+A **window** is `--since 90m|24h|7d`, `--from <t> [--to <t>]`, or `--date YYYY-MM-DD`. Times are local to the account's time zone, which the home view shows, and take the form `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. Ituran answers only up to the present, so a window ends at most 2 minutes ago: an end given with `--to` or `--date` that is later is cut there, and the output's `clamped` line names the end asked for. Whole-day windows end today instead. **Lists** take `--limit`, `--page`, `--fields` and `--full`.
 
 ```console
 $ ituran-axi where --limit 3
@@ -101,7 +101,9 @@ usage: "ituran-axi vehicle <plate> [--full]"
 ### Ituran's own rules
 
 ituran-axi handles these, and says so in its output where it matters:
-- Trips are matched by their end time, and appear up to a few hours after they end.
+- Trips are matched by their end time, and appear up to a few hours after they end. A trip belongs to the window it ends in; the output's `matched` line says so.
+- Ituran can list a trip still under way, with a provisional end at the moment of the request, past the window's end. `trips` and `trips --by plate` list and count only trips that end inside the window they print; the `left_out` line names the trips left out. `totals <plate>` shows Ituran's own figures, which are not checked trip by trip, and says so when the window ends within the last few hours.
+- Operational reports (`report events`, `report full` and the others with records) list only records stamped inside the window, and the `left_out` line counts any others Ituran sent.
 - Ituran fails a month of trips for the whole account in one request. ituran-axi reads a window longer than 7 days a week at a time, newest week first, and joins the pages. `trips --by plate` reads every trip of the window this way and sums them per vehicle.
 - BI reports ignore plate filters, so ituran-axi filters them itself.
 - Operational reports take at most 5 plates and less than 3 days per request. ituran-axi splits the request, walks the pages and removes repeated rows.
