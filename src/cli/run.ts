@@ -4,6 +4,7 @@
 import { encode } from '@toon-format/toon';
 import { cacheDir, noteAvailable, noteUnavailable } from '../account.ts';
 import { forgetToken } from '../auth.ts';
+import { withCommandLock } from '../command-lock.ts';
 import { alerts, event, events, groups } from '../commands/catalog.ts';
 import { centers } from '../commands/centers.ts';
 import { driver, drivers } from '../commands/drivers.ts';
@@ -562,7 +563,15 @@ export async function main(argv: string[], io: Io): Promise<number> {
       io.stdout(commandHelp(found));
       return 0;
     }
-    const out = await spec.run({ ...parsed, io });
+    // Help and local logout do not need network serialization. Validate the
+    // connection before creating a lock so missing settings stay actionable.
+    const input = { ...parsed, io };
+    const out =
+      spec.name === 'logout'
+        ? await spec.run(input)
+        : await withCommandLock(io.env, connected(io.env).deadline, () =>
+            spec.run(input),
+          );
     remember(spec, io, null);
     io.stdout(out);
     return 0;

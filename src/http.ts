@@ -128,23 +128,30 @@ export async function fetchAnswer(
     );
   }
   const started = performance.now();
-  let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response | undefined;
   let buffer: Buffer;
   try {
     response = await deps.fetch(url, {
       ...init,
       redirect: 'manual',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: controller.signal,
     });
     buffer = Buffer.from(await response.arrayBuffer());
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+  } catch {
     throw new AxiError(
       'unreachable',
-      timedOut
+      controller.signal.aborted
         ? `Ituran did not answer within ${Math.round(timeoutMs / 1000)} s.`
         : 'Ituran could not be reached. Check the network, or whether the Gate is running.',
     );
+  } finally {
+    clearTimeout(timer);
+    // Stop receiving even when buffering failed. The body may already be
+    // consumed or cancelled by fetch; cancelling it again is harmless.
+    controller.abort();
+    if (response?.body) await response.body.cancel().catch(() => {});
   }
   const text = buffer.toString('utf8');
   let json: unknown;

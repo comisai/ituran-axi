@@ -109,6 +109,10 @@ ituran-axi handles these, and says so in its output where it matters:
 - Keypad driver codes above 2^53 stay exact.
 - A model year or odometer of 0 means "not set".
 
+Commands sharing a user's cache run their HTTP reads one command at a time, including sign-in. Requests within a command keep the existing limit of two in flight, starting at least 400 ms apart. The next command waits at least 400 ms after the previous command finishes. The command lock is `~/.cache/ituran-axi/command.lock` (or under `XDG_CACHE_HOME`). Waiting is limited to 30 seconds, or the remaining `COMIS_DEADLINE` minus one second. A busy lock returns `unreachable` without sending a request. Normal completion, errors, SIGINT and SIGTERM release it. After a forced kill or crash, remove a leftover lock only after checking that no command is still running. Separate users, cache directories and hosts need their own coordination.
+
+Request timeouts cover the response body too: 60 seconds for reads, 30 seconds for sign-in, shortened by `COMIS_DEADLINE` when set. A timeout aborts the request and cancels the response body. The CLI flushes its output and exits, releasing Node's proxy dispatcher sockets even if a proxy has not answered CONNECT.
+
 ## Output and errors
 
 - **Size:** a value is cut at 500 characters and the whole output at about 4,000. `--full` lifts both limits, up to 256 KB.

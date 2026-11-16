@@ -7,6 +7,8 @@ needs every row: add `--full` (default output stops at about 4,000 characters)
 and a `--limit` that covers the total in the summary line. Reports and safety
 grades take at most 1,000 rows a page.
 
+Run commands in sequence. Commands sharing the same user's cache also take a process lock, with a 400 ms gap between commands; a concurrent command waits up to 30 seconds (less when `COMIS_DEADLINE` is set), then returns `unreachable` if the lock is still busy. Different cache directories or hosts do not share this lock.
+
 **Vehicles not seen for two days**
 ```sh
 ituran-axi where --stale 48h --limit 2000
