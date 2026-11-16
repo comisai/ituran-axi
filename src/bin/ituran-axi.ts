@@ -8,7 +8,7 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   throw error;
 });
 
-process.exitCode = await main(process.argv.slice(2), {
+const code = await main(process.argv.slice(2), {
   stdout: (text) => {
     process.stdout.write(text);
   },
@@ -16,3 +16,9 @@ process.exitCode = await main(process.argv.slice(2), {
   now: () => new Date(),
   http: defaultDeps,
 });
+
+// Node's environment-proxy dispatcher can keep a CONNECT socket alive even
+// after fetch has aborted. This is a one-command process: once cleanup has
+// finished and stdout has drained, exit to release the dispatcher and sockets.
+// Setting only exitCode leaves that socket holding the process open.
+process.stdout.end(() => process.exit(code));

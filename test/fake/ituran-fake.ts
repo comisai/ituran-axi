@@ -11,7 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 const ROUND2 = JSON.parse(
   readFileSync(
@@ -47,6 +47,12 @@ export interface FakeOptions {
   biPartial?: boolean;
   /** Override BI distance with malformed/missing upstream data. */
   biDistance?: unknown;
+  /** Transport faults, without contacting Ituran. */
+  stall?: 'headers' | 'body' | 'stream';
+  /** Delay every answer to expose overlapping processes. */
+  answerDelayMs?: number;
+  /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
+  stallProxy?: boolean;
   port?: number;
 }
 
@@ -56,6 +62,7 @@ export interface FakeState {
     path: string;
     query?: string;
     auth?: string;
+    at: number;
   }>;
   grants: { password: number; refresh: number };
 }
@@ -339,14 +346,32 @@ export async function startFake(options: FakeOptions = {}) {
       const path = url.pathname;
       const auth = req.headers.authorization;
       state.requests.push({
+        at: Date.now(),
         method: req.method ?? 'GET',
         path,
         ...(url.search ? { query: url.search } : {}),
         ...(auth ? { auth } : {}),
       });
+      if (options.stall) {
+        if (options.stall !== 'headers') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.write('[');
+          if (options.stall === 'stream') {
+            const timer = setInterval(() => res.write(' '), 25);
+            res.on('close', () => clearInterval(timer));
+          }
+        }
+        return;
+      }
       const send = (status: number, json?: unknown) => {
-        res.writeHead(status, { 'content-type': 'application/json' });
-        res.end(json === undefined ? '' : JSON.stringify(json));
+        const answer = () => {
+          res.writeHead(status, { 'content-type': 'application/json' });
+          res.end(json === undefined ? '' : JSON.stringify(json));
+        };
+        if (options.answerDelayMs) {
+          const timer = setTimeout(answer, options.answerDelayMs);
+          res.on('close', () => clearTimeout(timer));
+        } else answer();
       };
       let parsed: Row = {};
       try {
@@ -1003,6 +1028,22 @@ export async function startFake(options: FakeOptions = {}) {
       return send(404);
     });
   });
+  const sockets = new Set<Socket>();
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
+  if (options.stallProxy) {
+    server.on('connect', (req, socket) => {
+      state.requests.push({
+        method: 'CONNECT',
+        path: req.url ?? '',
+        at: Date.now(),
+      });
+      socket.resume();
+      socket.on('end', () => socket.end());
+    });
+  }
   await new Promise<void>((resolve) =>
     server.listen(options.port ?? 0, '127.0.0.1', resolve),
   );
@@ -1010,7 +1051,13 @@ export async function startFake(options: FakeOptions = {}) {
   return {
     url: `http://127.0.0.1:${port}/api/v2`,
     state,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    activeConnections: () => sockets.size,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections();
+        for (const socket of sockets) socket.destroy();
+      }),
   };
 }
 

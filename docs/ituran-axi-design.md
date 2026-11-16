@@ -396,6 +396,7 @@ ituran: User does not have permission to perform this action
 - **Methods:** `GET`, plus `POST` only to Ituran's read routes, checked against a closed list before anything is sent. A bug cannot send a write.
 - **Timeouts:**
   - 60 s per request, or the time left before `COMIS_DEADLINE` minus one second, whichever is shorter.
+  - The timeout includes buffering the response body. Cleanup clears the timer, aborts the request and cancels the body. After the command has cleaned up, the CLI flushes stdout and exits explicitly so an environment-proxy CONNECT socket cannot keep it alive.
   - `place --vehicles` warns before it starts that Ituran answers it slowly.
 - **Retries:**
   - A read that gets 429, 481 or 503 is retried once, after `Retry-After` or 2 s, if the deadline allows. Otherwise it reports `rate_limited` or `ituran_error`.
@@ -403,6 +404,7 @@ ituran: User does not have permission to perform this action
   - Timeouts are not retried. The agent can rerun.
 - **Walks:**
   - `where --all`, `odometer --all`, `place --vehicles`, `drivers <text>`, `places <text>` and `report` across plates and windows share one gate: at most two requests in flight, starts at least 400 ms apart.
+  - An exclusive `command.lock` under the user's cache serializes whole invocations, including sign-in, across tokens and accounts. `command.next` preserves a 400 ms gap between commands when writable. Acquisition waits at most 30 s, shortened by `COMIS_DEADLINE`; contention is `busy` before network I/O. Help and logout remain local. The lock records PID, hostname and a random owner token; an unref'd timer refreshes its inode's mtime every 2 s. A dead same-host PID or an expired 10 s heartbeat permits recovery by renaming to a unique path, re-checking ownership and freshness, then acquiring with `wx`. Release checks the token, cancels the heartbeat, closes the descriptor, and never lets cleanup errors escape. Normal completion, errors, SIGINT, SIGTERM and process exit release it. Cache creation failures try a shared per-user lock under `os.tmpdir()`; if that also fails, reads continue unlocked with unchanged output. Busy locks do not trigger fallback. Different cache roots or hosts require external coordination.
   - A walk that runs out of time stops, prints what it has, and says `partial: true` with the reason.
 
 ### 8.3 The account cache

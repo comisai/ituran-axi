@@ -21,6 +21,7 @@ export type ErrorCode =
   | 'rate_limited'
   | 'ituran_error'
   | 'unreachable'
+  | 'busy'
   | 'output_too_large'
   | 'internal_error';
 

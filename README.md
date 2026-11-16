@@ -109,6 +109,12 @@ ituran-axi handles these, and says so in its output where it matters:
 - Keypad driver codes above 2^53 stay exact.
 - A model year or odometer of 0 means "not set".
 
+Commands sharing a user's cache run their HTTP reads one command at a time, including sign-in. Requests within a command keep the existing limit of two in flight, starting at least 400 ms apart. The next command waits at least 400 ms after the previous command finishes. The command lock is `~/.cache/ituran-axi/command.lock` (or under `XDG_CACHE_HOME`). Waiting is limited to 30 seconds, or the remaining `COMIS_DEADLINE` minus one second. A busy lock returns `busy` without sending a request. Wait for the other command to finish before trying again.
+
+The lock records its owner's PID, hostname and a random token. The holder refreshes its heartbeat every two seconds. A dead PID on the same host, or a heartbeat missing for ten seconds, permits automatic recovery. Release checks the owner token, so an old holder cannot remove a replacement lock. If cache storage is unavailable, the client tries a shared per-user lock under the system temporary directory. If that is also unavailable, it continues without a process lock, with the same output. Cache and cleanup errors never replace a successful result. Separate users, cache directories and hosts need their own coordination; the 400 ms gap between commands also depends on writable cache storage.
+
+Request timeouts cover the response body too: 60 seconds for reads, 30 seconds for sign-in, shortened by `COMIS_DEADLINE` when set. A timeout aborts the request and cancels the response body. The CLI flushes its output and exits, releasing Node's proxy dispatcher sockets even if a proxy has not answered CONNECT.
+
 ## Output and errors
 
 - **Size:** a value is cut at 500 characters and the whole output at about 4,000. `--full` lifts both limits, up to 256 KB.
@@ -127,6 +133,7 @@ ituran-axi handles these, and says so in its output where it matters:
 | `not_entitled`, `feature_off`, `needs_app_id` | This account does not include that service |
 | `rejected` | Ituran refused the request; its message is shown |
 | `rate_limited`, `ituran_error`, `unreachable` | Ituran limited the request, failed, or could not be reached |
+| `busy` | Another local command holds the process lock. Wait for it to finish before trying again. |
 | `reconnect_needed`, `refused` | Inside Comis: the owner must reconnect, or the Gate refused |
 | `output_too_large` | Even `--full` would exceed 256 KB; narrow the query |
 | `internal_error` | A bug in ituran-axi; please [report it](https://github.com/comisai/ituran-axi/issues) |
