@@ -2,8 +2,10 @@
 // and lists a trip only some hours after it ends; the output says so when it
 // matters. Ituran can also list a trip still under way, with a provisional end
 // past the window: trips keeps only the trips that end inside the window it
-// prints, and says how many it left out. Totals for the whole account take
-// dates, not times.
+// prints, and says how many it left out. Pages run over Ituran's list, so a
+// page that is not the whole list gives Ituran's count only as an upper bound,
+// and a page that keeps no trip says so rather than claiming an empty window.
+// Totals for the whole account take dates, not times.
 
 import type { Account } from '../account.ts';
 import type { CommandInput } from '../cli/table.ts';
@@ -215,22 +217,24 @@ export async function trips(input: CommandInput): Promise<string> {
   const got = await joinedRows(lists, page, limit);
   const strays = got.rows.filter((t) => outside(endOf(t), w));
   const rows = got.rows.filter((t) => !outside(endOf(t), w)).map(tripRow);
-  const total = got.total === null ? null : got.total - strays.length;
   const whose = plates.length ? `for ${plates.join(' ')}` : 'for all vehicles';
   const nowLocal = naiveMs(localTime(ctx.now, acc.zone)) as number;
   const recent = nowLocal - (naiveMs(w.to) as number) < RECENT_HOURS * 3600_000;
-  const allShown = total !== null && rows.length === total;
-  const km = allShown
-    ? Math.round(
-        rows.reduce((s, r) => s + (typeof r.km === 'number' ? r.km : 0), 0) *
-          10,
-      ) / 10
-    : null;
-  const summary = `${rows.length ? countLine(rows.length, total, 'trip') : '0 trips'} ${whose}${km !== null && rows.length ? ` · ${km} km` : ''}`;
-  // Pages count Ituran's rows, those left out included.
+  // Pages run over Ituran's list, trips that end outside the window included,
+  // and only this page is checked: the window's count is known only when this
+  // page holds Ituran's whole list.
+  const listed = got.total;
+  const pages = listed === null ? null : Math.ceil(listed / limit);
+  const whole =
+    listed === 0 ||
+    (page === 1 && listed !== null && got.rows.length >= listed);
+  const summary = whole
+    ? `${plural(rows.length, 'trip')} ${whose}${rows.length ? ` · ${kmOf(rows)} km` : ''}`
+    : pageSummary(rows.length, page, pages, listed, whose);
   const shownTo = (page - 1) * limit + got.rows.length;
+  const more = listed === null ? got.rows.length === limit : shownTo < listed;
   const help: string[] = [];
-  if (got.total !== null && shownTo < got.total) {
+  if (more) {
     const args = [
       ...plates,
       ...flagWords(values),
@@ -239,7 +243,7 @@ export async function trips(input: CommandInput): Promise<string> {
       ...(limit !== 20 ? ['--limit', String(limit)] : []),
     ];
     help.push(
-      `Run \`ituran-axi trips ${args.join(' ')}\` for the next ${Math.min(limit, got.total - shownTo)}`,
+      `Run \`ituran-axi trips ${args.join(' ')}\` for page ${page + 1}${pages === null ? '' : ` of ${pages}`}`,
     );
   }
   if (rows.length)
@@ -259,7 +263,7 @@ export async function trips(input: CommandInput): Promise<string> {
       ...clamped(w),
       zone: acc.zone,
       ...leftOut(strays),
-      ...(recent || !rows.length ? { note: LATE_NOTE } : {}),
+      ...(recent || (whole && !rows.length) ? { note: LATE_NOTE } : {}),
     },
     rows,
     columns,
@@ -267,6 +271,32 @@ export async function trips(input: CommandInput): Promise<string> {
     full: values.full === true,
     narrower: 'ituran-axi trips <plate> --since 24h',
   });
+}
+
+const kmOf = (rows: Row[]) =>
+  Math.round(
+    rows.reduce((s, r) => s + (typeof r.km === 'number' ? r.km : 0), 0) * 10,
+  ) / 10;
+
+/**
+ * The summary of one page of a longer list: the trips kept on it, and Ituran's
+ * count only as an upper bound, since other pages may hold trips that end
+ * outside the window. An empty page is never an empty window.
+ */
+function pageSummary(
+  kept: number,
+  page: number,
+  pages: number | null,
+  listed: number | null,
+  whose: string,
+): string {
+  if (kept)
+    return listed === null
+      ? `${plural(kept, 'trip')} on page ${page} ${whose}`
+      : `${kept} of up to ${listed} trips ${whose}`;
+  if (pages !== null && page > pages)
+    return `none on page ${page} ${whose}; Ituran's list ends at page ${pages}`;
+  return `none on page ${page}${pages === null ? '' : ` of ${pages}`} ${whose}; the total in the window is unknown${listed === null ? '' : `: Ituran listed ${listed}, trips that end outside the window included`}`;
 }
 
 const BY_KNOWN = [

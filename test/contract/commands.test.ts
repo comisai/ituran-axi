@@ -127,7 +127,7 @@ describe('ituran-axi against the fake', () => {
       summary(
         await ok('trips', '12345678', '--date', '2026-11-07', '--limit', '5'),
       ),
-      /^5 of 12 trips for 12345678$/,
+      /^5 of up to 12 trips for 12345678$/,
     );
     const none = await ok('trips', '--date', '2026-11-01');
     assert.match(summary(none), /^0 trips for all vehicles$/);
@@ -149,7 +149,7 @@ describe('ituran-axi against the fake', () => {
     const window = ['--from', '2026-10-08', '--to', '2026-11-07'];
     const before = fake.state.requests.length;
     const month = await ok('trips', ...window);
-    assert.match(summary(month), /^20 of 36 trips for all vehicles$/);
+    assert.match(summary(month), /^20 of up to 36 trips for all vehicles$/);
     const ids = (text: string) =>
       (doc(text).trips as Array<{ id: number }>).map((t) => t.id);
     assert.deepEqual(ids(month), [
@@ -159,7 +159,7 @@ describe('ituran-axi against the fake', () => {
     ]);
     assert.match(
       month,
-      /Run `ituran-axi trips --from 2026-10-08 --to 2026-11-07 --page 2` for the next 16/,
+      /Run `ituran-axi trips --from 2026-10-08 --to 2026-11-07 --page 2` for page 2 of 2/,
     );
     const spans = fake.state.requests
       .slice(before)
@@ -174,7 +174,7 @@ describe('ituran-axi against the fake', () => {
       assert.ok(days < 7, `${q.get('from_date')} to ${q.get('to_date')}`);
     }
     const next = await ok('trips', ...window, '--page', '2');
-    assert.match(summary(next), /^16 of 36 trips for all vehicles$/);
+    assert.match(summary(next), /^16 of up to 36 trips for all vehicles$/);
     assert.deepEqual(ids(next), [
       ...Array.from({ length: 6 }, (_, i) => 7011 + i),
       ...Array.from({ length: 7 }, (_, i) => 7003 + i),
