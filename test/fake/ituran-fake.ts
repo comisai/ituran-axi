@@ -58,6 +58,12 @@ export interface FakeOptions {
    * that moment too.
    */
   liveTrip?: boolean;
+  /**
+   * Three vehicles are driving now and Ituran lists their trips under way
+   * first; a fourth vehicle, FOUR_TRIPS, finished four trips in the last day.
+   * A first page of three holds only trips that end past the window.
+   */
+  strayFleet?: boolean;
   /** Delay every answer to expose overlapping processes. */
   answerDelayMs?: number;
   /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
@@ -274,6 +280,31 @@ function liveTrips(): Row[] {
   under.distance = 23;
   under.trip_status = 'trip_start';
   return [done, under];
+}
+
+/** The vehicle with four finished trips in the last day under strayFleet. */
+export const FOUR_TRIPS = PLATES[7] as string;
+
+/** Three trips under way, listed first, then FOUR_TRIPS' four, newest first. */
+function strayFleetTrips(): Row[] {
+  const at = (t: Row, side: string, time: string) => {
+    (t[side] as Row).timestamp = time;
+  };
+  const under = [4, 5, 6].map((i) => {
+    const t = trip(9200 + i, PLATES[i] as string, '', 0);
+    at(t, 'start_location', localNow(30 * 60_000));
+    at(t, 'end_location', `${localNow()}.883`);
+    t.trip_status = 'trip_start';
+    return t;
+  });
+  const done = [3, 6, 14, 20].map((hours, i) => {
+    const t = trip(9300 + i, FOUR_TRIPS, '', 0);
+    at(t, 'start_location', localNow((hours + 0.5) * 3_600_000));
+    at(t, 'end_location', localNow(hours * 3_600_000));
+    t.distance = [53, 1, 54, 1][i];
+    return t;
+  });
+  return [...under, ...done];
 }
 
 /** Account-wide trips over more than this many days fail, as production's do. */
@@ -568,6 +599,11 @@ export async function startFake(options: FakeOptions = {}) {
         const ends = (t: Row) => String((t.end_location as Row).timestamp);
         const starts = (t: Row) => String((t.start_location as Row).timestamp);
         const hits = [
+          ...(options.strayFleet ? strayFleetTrips() : []).filter((t) =>
+            t.trip_status === 'trip_start'
+              ? starts(t) <= to && ends(t) >= from
+              : ends(t) >= from && ends(t) <= to,
+          ),
           ...TRIPS.filter((t) => ends(t) >= from && ends(t) <= to),
           // A trip under way is listed while it overlaps the window.
           ...(options.liveTrip ? liveTrips() : []).filter((t) =>

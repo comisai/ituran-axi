@@ -341,7 +341,7 @@ help[2]:
 
 ```text
 $ ituran-axi trips 12345678 --since 3d
-summary: 4 of 25 trips for 12345678
+summary: 4 of up to 25 trips for 12345678
 window: 2026-11-05T12:49:27 to 2026-11-08T12:47:27
 zone: Asia/Jerusalem
 note: Ituran matches trips by their end time and lists a trip up to a few hours after it ends.
