@@ -12,6 +12,7 @@ export type ErrorCode =
   | 'reconnect_needed'
   | 'refused'
   | 'held_for_approval'
+  | 'write_incomplete'
   | 'not_visible'
   | 'not_entitled'
   | 'feature_off'
@@ -135,8 +136,8 @@ export function classify(
     return new AxiError(
       'held_for_approval',
       valid
-        ? `The write is waiting for the owner's card. Do not retry; run \`comis action wait ${action}\`.`
-        : "The write is waiting for the owner's card. Do not retry; check Comis actions.",
+        ? `The write is waiting for the owner's card. Do not repeat it; run \`comis action wait ${action}\`.`
+        : "The write is waiting for the owner's card. Do not repeat it; run `comis action list`.",
       valid ? { action } : {},
     );
   }

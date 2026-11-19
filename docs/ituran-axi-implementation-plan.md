@@ -1,5 +1,7 @@
 # ituran-axi: implementation plan
 
+This historical plan describes the read-only releases. Version 0.2.0 adds confirmed place, alert and vehicle-group writes; see the [current commands](../README.md#change-a-place-alert-or-vehicle-group). Writes are proved on fakes only; the owner performs the QA-account run.
+
 | | |
 | --- | --- |
 | Status | M2, M3 and M4 done on 2026-11-08. Every read command is built, tested (62 tests) and passes the live gate on production, including the owner's 126 questions (S14). The repository is public (V1), and 0.1.0 is on npm with signed provenance (M5, 2026-11-09). C1 to C3 are merged into Comis. |

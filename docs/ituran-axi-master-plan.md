@@ -1,5 +1,7 @@
 # ituran-axi: master plan
 
+This historical plan describes the read-only releases. Version 0.2.0 adds confirmed place, alert and vehicle-group writes; see the [current commands](../README.md#change-a-place-alert-or-vehicle-group). Writes are proved on fakes only; the owner performs the QA-account run.
+
 | | |
 | --- | --- |
 | Status | `ituran-axi` is built and passes the live gate on production (`--strict --deep --parity --use-cases`, S1 to S14, 2026-11-08). That includes the owner's 126 questions: 117 answered, and 9 that name the temperature service this account lacks. The repository is public (V1), and 0.1.0 is on npm with signed provenance (M5), both on 2026-11-09. C1, C2 and C3 are merged into Comis `main` (2026-11-08): [PR #3617](https://github.com/comisai/comis/pull/3617) (C2, D3617) and [PR #3630](https://github.com/comisai/comis/pull/3630) (C1, D3630, and C3). |

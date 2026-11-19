@@ -3,12 +3,12 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandInput } from '../cli/table.ts';
 import { readSettings } from '../config.ts';
-import { usage } from '../errors.ts';
+import { AxiError, usage } from '../errors.ts';
 import { isWrite, type Write, writeBody } from '../http.ts';
 import { visibleString } from '../output/text.ts';
 import { FULL_LIMIT, render } from '../output/toon.ts';
 import { normalizePlate } from '../plates.ts';
-import { open } from './common.ts';
+import { open, type Row, recordOutput } from './common.ts';
 
 export type WriteKind = 'place' | 'alert' | 'group';
 const ACTIONS: Record<WriteKind, readonly string[]> = {
@@ -136,7 +136,9 @@ export async function writeRecord(
         : { content_type: 'application/json', body_json: bodyJson }),
     },
     [
-      'Run the same command with --confirm instead of --dry-run to send it once',
+      v['dry-run']
+        ? 'Run the same command with --confirm instead of --dry-run to send it once'
+        : 'Run the same command with --confirm to send it once',
     ],
   );
   if (Buffer.byteLength(preview) > FULL_LIMIT)
@@ -145,7 +147,13 @@ export async function writeRecord(
     );
   if (v.confirm !== true) return preview;
   const ctx = open(input);
-  const response = await ctx.client.write(request);
+  const answer = await ctx.client.write(request);
+  const response =
+    answer.json &&
+    typeof answer.json === 'object' &&
+    !Array.isArray(answer.json)
+      ? (answer.json as Row)
+      : {};
   if (kind === 'place') {
     // Best effort: a successful write must not be replaced by a cache error.
     try {
@@ -154,10 +162,57 @@ export async function writeRecord(
       /* stale cache can be refreshed */
     }
   }
-  return render({
-    summary: 'Write sent once',
-    method,
-    path: request.path,
-    response: response ?? null,
-  });
+  const receipt: Row = {};
+  for (const key of ['place_id', 'alert_id', 'vehicle_group_id']) {
+    const id = response[key];
+    if (
+      (typeof id === 'string' && /^\d{1,20}$/.test(id)) ||
+      (typeof id === 'number' && Number.isSafeInteger(id) && id >= 0)
+    )
+      receipt[key] = id;
+  }
+  if (typeof response.result === 'boolean') receipt.result = response.result;
+  if (answer.status === 404 && response.already_absent === true) {
+    receipt.already_absent = true;
+    if (typeof response.ituran === 'string') receipt.ituran = response.ituran;
+    if (typeof response.codes === 'string') receipt.codes = response.codes;
+  }
+  const failed = Array.isArray(response.failed_vehicles)
+    ? response.failed_vehicles
+    : [];
+  if (response.result === false || failed.length > 0) {
+    const plates = failed.slice(0, 20).flatMap((item: unknown) => {
+      const plate =
+        item && typeof item === 'object' ? (item as Row).license_plate : item;
+      return typeof plate === 'string' && /^[0-9A-Z]{1,12}$/.test(plate)
+        ? [plate]
+        : [];
+    });
+    throw new AxiError(
+      'write_incomplete',
+      'Ituran did not complete this write. Some changes may have been applied. Do not repeat it. Check `comis action list`, or read the places, alerts or groups first.',
+      {
+        summary: 'Write incomplete',
+        status: answer.status,
+        failed_vehicles_count: failed.length,
+        ...(plates.length
+          ? {
+              failed_vehicles: plates.join(', '),
+              failed_vehicles_shown: plates.length,
+            }
+          : {}),
+      },
+    );
+  }
+  return recordOutput(
+    {
+      summary: 'Write sent once',
+      method,
+      path: request.path,
+      status: answer.status,
+      response: receipt,
+    },
+    false,
+    'ituran-axi places|alerts|groups',
+  );
 }

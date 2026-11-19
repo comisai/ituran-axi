@@ -582,7 +582,7 @@ function remember(spec: Spec, io: Io, error: AxiError | null): void {
 }
 
 export async function main(argv: string[], io: Io): Promise<number> {
-  const commandDeadline = Date.now() + 25_000;
+  const commandStarted = Date.now();
   let spec: Spec = HOME;
   let usageText = `${BIN} [command] [flags]`;
   try {
@@ -633,6 +633,11 @@ export async function main(argv: string[], io: Io): Promise<number> {
       out = await spec.run({ ...parsed, io });
     } else {
       const settings = connected(io.env);
+      const confirmedWrite =
+        writeAction(spec.name, parsed.positionals[0]) &&
+        parsed.values.confirm === true;
+      const commandDeadline =
+        commandStarted + (confirmedWrite ? 55_000 : 25_000);
       const deadline = Math.min(commandDeadline, settings.deadline ?? Infinity);
       // One deadline covers lock waiting, sign-in, pacing, retries and every
       // page/window. A task deadline further in the future cannot extend it.

@@ -69,6 +69,8 @@ export interface FakeOptions {
   /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
   stallProxy?: boolean;
   /** Write answers, including Gate holds and upstream failures. */
+  /** Drop a write connection after accepting it, to model an uncertain outcome. */
+  writeDrop?: boolean;
   writeReply?: {
     status: number;
     json?: unknown;
@@ -518,6 +520,15 @@ export async function startFake(options: FakeOptions = {}) {
         (method === 'PUT' && custom) ||
         (method === 'PATCH' && /^\/api\/v2\/vehicle-groups\/\d+$/.test(path));
       if (write) {
+        if (options.writeDrop) {
+          state.effects.push({
+            method,
+            path,
+            ...(body ? { body: parsed } : {}),
+          });
+          req.socket.destroy();
+          return;
+        }
         if (options.writeReply) {
           res.writeHead(options.writeReply.status, {
             'content-type': 'application/json',

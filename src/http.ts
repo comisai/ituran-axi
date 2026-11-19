@@ -81,6 +81,8 @@ export interface Session {
   header(): Promise<string>;
   /** After a 401: true when a fresh token is worth exactly one more try. */
   renew(used: string): Promise<boolean>;
+  /** Forget a refused cached token, without signing in or replaying a write. */
+  invalidate?(used: string): Promise<void>;
 }
 
 export function isRead(
@@ -104,6 +106,14 @@ export function writeBody(body: unknown): string {
     (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`,
   );
 }
+
+export interface WriteAnswer {
+  status: number;
+  json: unknown;
+}
+
+const UNCERTAIN_WRITE =
+  "The write may have been applied, or may be waiting for the owner's card. Do not repeat it. Check `comis action list`, or read `ituran-axi places`, `ituran-axi alerts` or `ituran-axi groups` first.";
 
 export interface Write {
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -251,7 +261,7 @@ export class Client {
   }
 
   /** A confirmed record write. Never replay a request, even after 401 or 503. */
-  async write(write: Write): Promise<unknown> {
+  async write(write: Write): Promise<WriteAnswer> {
     if (
       !isWrite(write.method, write.path) ||
       (write.method === 'DELETE'
@@ -264,44 +274,77 @@ export class Client {
       );
     }
     const header = await this.session.header();
-    const answer = await this.pace.run(() =>
-      fetchAnswer(
-        this.deps,
-        urlOf(this.settings, write),
-        {
-          method: write.method,
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': `ituran-axi/${VERSION}`,
-            Authorization: header,
+    let answer: Answer;
+    try {
+      answer = await this.pace.run(() =>
+        fetchAnswer(
+          this.deps,
+          urlOf(this.settings, write),
+          {
+            method: write.method,
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': `ituran-axi/${VERSION}`,
+              Authorization: header,
+              ...(write.body !== undefined
+                ? { 'Content-Type': 'application/json' }
+                : {}),
+            },
             ...(write.body !== undefined
-              ? { 'Content-Type': 'application/json' }
+              ? { body: writeBody(write.body) }
               : {}),
           },
-          ...(write.body !== undefined ? { body: writeBody(write.body) } : {}),
-        },
-        Math.min(READ_TIMEOUT_MS, timeLeft(this.settings, this.now)),
-      ),
-    );
-    // Deleting an already absent record reaches the requested final state.
+          Math.min(READ_TIMEOUT_MS, timeLeft(this.settings, this.now)),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof AxiError && error.code === 'unreachable')
+        throw new AxiError('unreachable', UNCERTAIN_WRITE, {
+          detail: error.message,
+        });
+      throw error;
+    }
+    if (answer.status === 401 && !answer.headers.get('comis-refusal')) {
+      try {
+        await this.session.invalidate?.(header);
+      } catch {
+        /* preserve the refusal if cache cleanup fails */
+      }
+    }
+    const codes = ituranCodes(answer.json);
+    const said = ituranMessage(answer.json);
+    // Only an ordinary record-not-found answer means the goal is reached.
     if (
       write.method === 'DELETE' &&
       answer.status === 404 &&
-      !answer.headers.get('comis-refusal')
+      !answer.headers.get('comis-refusal') &&
+      codes.every((code) => code === '404')
     )
-      return { result: true, already_absent: true };
+      return {
+        status: 404,
+        json: {
+          result: true,
+          already_absent: true,
+          ...(said ? { ituran: said } : {}),
+          ...(codes.length ? { codes: codes.join(' ') } : {}),
+        },
+      };
     const error = classify(answer, { what: 'record write' });
     if (error) {
-      const codes = ituranCodes(answer.json);
-      throw new AxiError(error.code, error.message, {
-        ...error.fields,
-        ...(codes.length ? { codes: codes.join(' ') } : {}),
-        ...(ituranMessage(answer.json)
-          ? { ituran: ituranMessage(answer.json) as string }
-          : {}),
-      });
+      throw new AxiError(
+        error.code,
+        answer.status >= 500 && error.code !== 'held_for_approval'
+          ? UNCERTAIN_WRITE
+          : error.message,
+        {
+          ...error.fields,
+          status: answer.status,
+          ...(codes.length ? { codes: codes.join(' ') } : {}),
+          ...(said ? { ituran: said } : {}),
+        },
+      );
     }
-    return answer.json;
+    return { status: answer.status, json: answer.json };
   }
 
   /** One read: its JSON, null for an empty 404 where allowed, or a classified error. */
