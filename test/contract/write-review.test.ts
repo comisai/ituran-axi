@@ -121,7 +121,7 @@ describe('pre-release write review', () => {
   });
 
   it('only treats plain record-not-found DELETE answers as already absent and preserves status and words', async () => {
-    for (const code of ['404', '1020', '404.3']) {
+    for (const code of ['404', '1020', '404.3', undefined]) {
       const fake = await startFake({
         token: 'fake-token',
         writeReply: {

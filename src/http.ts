@@ -318,6 +318,7 @@ export class Client {
       write.method === 'DELETE' &&
       answer.status === 404 &&
       !answer.headers.get('comis-refusal') &&
+      codes.length > 0 &&
       codes.every((code) => code === '404')
     )
       return {
