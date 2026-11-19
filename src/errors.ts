@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'access_blocked'
   | 'reconnect_needed'
   | 'refused'
+  | 'held_for_approval'
   | 'not_visible'
   | 'not_entitled'
   | 'feature_off'
@@ -126,6 +127,17 @@ export function classify(
     return new AxiError(
       'reconnect_needed',
       'Ituran refused the stored sign-in. Ask the owner to reconnect Ituran.',
+    );
+  }
+  if (refusal === 'approval_pending') {
+    const action = headers.get('comis-action')?.split(';')[0]?.trim();
+    const valid = action && /^[A-Za-z0-9_-]{1,100}$/.test(action);
+    return new AxiError(
+      'held_for_approval',
+      valid
+        ? `The write is waiting for the owner's card. Do not retry; run \`comis action wait ${action}\`.`
+        : "The write is waiting for the owner's card. Do not retry; check Comis actions.",
+      valid ? { action } : {},
     );
   }
   if (refusal) {

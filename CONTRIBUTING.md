@@ -31,7 +31,7 @@ npm run test:dist   # contract and AXI-principle tests against the built CLI
 | `src/cli/` | Argument parsing, dispatch, and the command table that drives parsing, `--help` and usage lines |
 | `src/commands/` | The commands, one module per area: `vehicles`, `trips`, `drivers`, `places`, `catalog`, `readings`, `reports`, `centers` and the home view |
 | `src/output/` | TOON rendering, size bounds and text safety |
-| `src/http.ts`, `src/pace.ts`, `src/errors.ts` | Read-only requests, request pacing, and the error codes |
+| `src/http.ts`, `src/pace.ts`, `src/errors.ts` | Read requests, allowed record writes, request pacing, and the error codes |
 | `src/auth.ts`, `src/config.ts`, `src/account.ts` | Settings, sign-in and the token cache, and the account and its time zone |
 | `src/time.ts`, `src/plates.ts`, `src/geo.ts`, `src/json.ts` | Time windows and zones, plate keys, distances, and integers above 2^53 |
 | `test/unit/`, `test/contract/` | Unit tests, and end-to-end tests of the CLI against a fake Ituran |
@@ -47,7 +47,7 @@ ituran-axi is used by AI agents, so its output is part of its interface. Follow 
 - **Output:** results go to stdout as TOON, starting with a summary line. Output stays within the size limits unless `--full` is given.
 - **Hints:** the `help[N]:` footer is a TOON list, one `- ` item per line, so the whole output decodes as one TOON document. `helpBlock` in `src/output/toon.ts` writes it. Each hint starts with ``Run `ituran-axi …` ``.
 - **Errors:** an error prints `message`, `code` and `usage` on stdout. The exit code is 1 for an error and 2 for a usage error. Reuse an existing code before adding a new one.
-- **Read-only:** ituran-axi never changes Ituran settings or sends a command to a vehicle. `src/http.ts` refuses any request that is not a read: a GET, or a POST to a route listed in `READ_POSTS`.
+- **Writes:** only places, alerts and vehicle groups may change, using the closed v2 allowlist in `src/http.ts`. A write previews by default and sends once only with `--confirm`; it is never retried. Device commands, driver changes, contact writes and drive sharing have no CLI command. Reads still use GET or the closed `READ_POSTS` list. Tests use the fake; the owner performs the QA-account write run.
 - **Secrets:** a password or token never appears in output, errors or logs.
 - **Data from Ituran is untrusted.** Names, notes and event titles are written by people. They go through the text-safety layer in `src/output/text.ts`. Write invisible or bidirectional characters in source as `\u` escapes, never as literal characters.
 - **Personal data:** positions, addresses and driver names stay inside the connection. Phone numbers and e-mail addresses appear only with `--full` or `--fields`.

@@ -1,6 +1,6 @@
 // The Comis Gate's ituran entry against the AXI itself: every request
 // ituran-axi sends must get the token and pass as a read, and the identity
-// routes, device commands and writes must be denied. The fixture is a copy of
+// routes and device commands must be denied; record writes require a card. The fixture is a copy of
 // the ituran entry in Comis's catalog/key-services.json; update it when either
 // side changes. The matcher
 // follows the Gate's rules: paths only, {name} matches one segment of
@@ -166,20 +166,18 @@ describe('Comis Gate entry', () => {
     );
   });
 
-  it('denies the token route, device commands, contacts and every write', () => {
+  it('denies token, device, driver, contact and unlisted writes', () => {
     for (const [method, path] of [
       ['POST', '/api/v1/oauth/token'],
       ['POST', '/api/v2/commands/send'],
       ['POST', '/api/v2/commands/start-tracking'],
       ['POST', '/api/v2/commands/update-keyboard'],
       ['POST', '/api/v2/vehicles/12345678/share-drive'],
-      ['POST', '/api/v2/places'],
-      ['PUT', '/api/v2/places/1'],
-      ['DELETE', '/api/v2/alerts/1'],
-      ['PATCH', '/api/v2/vehicle-groups/1'],
       ['PUT', '/api/v2/users/me/password'],
       ['POST', '/api/v2/drive-permission-group'],
       ['POST', '/api/v2/contacts'],
+      ['PUT', '/api/advanced/v1/drivers/assignments/1'],
+      ['POST', '/api/v3/places'],
       ['POST', '/api/v2/push-notifications/alerts/search'],
     ] as const) {
       assert.equal(judge(method, path).decide, 'deny', `${method} ${path}`);

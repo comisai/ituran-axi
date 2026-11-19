@@ -1,7 +1,9 @@
 {
   "title": "Ituran",
   "key_help": "the username and password of an Ituran service account without two-step sign-in; the Gate signs in with them and keeps the token",
-  "hosts": ["api.ituran.com"],
+  "hosts": [
+    "api.ituran.com"
+  ],
   "credential": {
     "secret": "ituran",
     "exchange": "ituran",
@@ -49,7 +51,21 @@
       "GET /api/v1/temperatures/exceptions/stats/perday",
       "GET /api/v1/maintenance/{treatments|type}",
       "GET /api/v1/vehicles/maintenance",
-      "GET /api/v1/vehicles/{plate}/maintenance"
+      "GET /api/v1/vehicles/{plate}/maintenance",
+      "POST /api/v2/places",
+      "PUT /api/v2/places/{place}",
+      "DELETE /api/v2/places/{place}",
+      "POST /api/v2/alerts",
+      "PUT /api/v2/alerts/{alert}",
+      "DELETE /api/v2/alerts/{alert}",
+      "PUT /api/v2/alerts/custom/{alert}",
+      "POST /api/v2/vehicles/{plate}/alerts",
+      "PUT /api/v2/vehicles/{plate}/alerts/{alert}",
+      "DELETE /api/v2/vehicles/{plate}/alerts/{alert}",
+      "POST /api/v2/vehicle-groups",
+      "PUT /api/v2/vehicle-groups/{group}",
+      "PATCH /api/v2/vehicle-groups/{group}",
+      "DELETE /api/v2/vehicle-groups/{group}"
     ]
   },
   "reads": [
@@ -94,13 +110,454 @@
       "decide": "deny"
     },
     {
+      "match": "* /api/advanced/v1/drivers",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/advanced/v1/drivers/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/contacts",
+      "decide": "deny"
+    },
+    {
+      "match": "* /api/v2/contacts/{path...}",
+      "decide": "deny"
+    },
+    {
+      "match": "POST /api/v2/places",
+      "decide": "ask",
+      "render": "Create an Ituran place",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}",
+        "Ituran place {response.place_id}"
+      ]
+    },
+    {
+      "match": "PUT /api/v2/places/{place}",
+      "decide": "ask",
+      "render": "Change Ituran place {place}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "DELETE /api/v2/places/{place}",
+      "decide": "ask",
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "POST /api/v2/alerts",
+      "decide": "ask",
+      "render": "Create an Ituran alert",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}",
+        "Ituran alert {response.alert_id}"
+      ]
+    },
+    {
+      "match": "PUT /api/v2/alerts/{alert}",
+      "decide": "ask",
+      "render": "Change Ituran alert {alert}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "DELETE /api/v2/alerts/{alert}",
+      "decide": "ask",
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "PUT /api/v2/alerts/custom/{alert}",
+      "decide": "ask",
+      "render": "Change how Ituran alert {alert} tells a contact",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "POST /api/v2/vehicles/{plate}/alerts",
+      "decide": "ask",
+      "render": "Create an Ituran alert on vehicle {plate}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}",
+        "Ituran alert {response.alert_id}"
+      ]
+    },
+    {
+      "match": "PUT /api/v2/vehicles/{plate}/alerts/{alert}",
+      "decide": "ask",
+      "render": "Change Ituran alert {alert} on vehicle {plate}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "DELETE /api/v2/vehicles/{plate}/alerts/{alert}",
+      "decide": "ask",
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "POST /api/v2/vehicle-groups",
+      "decide": "ask",
+      "render": "Create an Ituran vehicle group",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}",
+        "Ituran vehicle group {response.vehicle_group_id}"
+      ]
+    },
+    {
+      "match": "PUT /api/v2/vehicle-groups/{group}",
+      "decide": "ask",
+      "render": "Replace Ituran vehicle group {group}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "PATCH /api/v2/vehicle-groups/{group}",
+      "decide": "ask",
+      "render": "Change the vehicles in Ituran vehicle group {group}",
+      "form": {
+        "labels": {
+          "name": "Name",
+          "description": "Description",
+          "place_type": "Kind",
+          "point": "Point",
+          "points": "Points",
+          "radius": "Radius",
+          "width": "Width",
+          "layer_id": "Layer",
+          "alert_name": "Name",
+          "alert_description": "Description",
+          "event_type": "Event",
+          "alert_status": "Status",
+          "always_on": "Always on",
+          "time_filtering": "Times",
+          "alert_contacts": "Who is told",
+          "license_plates": "Vehicles",
+          "vehicle_group_ids": "Vehicle groups",
+          "speed_exceeds": "Speed above",
+          "place_alert": "Place",
+          "contact_id": "Contact",
+          "is_send_push": "Push",
+          "is_send_sms": "SMS",
+          "is_send_email": "Email",
+          "vehicle_group_id": "Group",
+          "vehicle_group_name": "Name",
+          "icon_id": "Icon",
+          "parent_group_id": "Parent group"
+        }
+      },
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
+      "match": "DELETE /api/v2/vehicle-groups/{group}",
+      "decide": "ask",
+      "receipt": [
+        "Ituran refused it: {response.error_code} {response.error_description}"
+      ]
+    },
+    {
       "match": "* *",
       "decide": "deny"
     }
   ],
   "forbidden": "entitlement",
   "compose": {
-    "parts": ["username", "password"],
+    "parts": [
+      "username",
+      "password"
+    ],
     "value": "{username} {password}",
     "part_pattern": "^[\\x21-\\x7e]{1,256}$"
   },
