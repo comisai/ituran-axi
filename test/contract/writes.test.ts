@@ -294,6 +294,11 @@ describe('approved record writes', () => {
     const fake = await startFake();
     try {
       const env = fakeEnv(fake.url);
+      const oversizedFile = join(tempDir(), 'oversized.json');
+      writeFileSync(
+        oversizedFile,
+        JSON.stringify({ name: 'x'.repeat(262144) }),
+      );
       for (const args of [
         ['place', 'add'],
         ['group', 'edit'],
@@ -316,12 +321,7 @@ describe('approved record writes', () => {
           '--body',
           JSON.stringify({ name: 'Bearer abcdefghijklmnopqrstuvwxyz' }),
         ],
-        [
-          'place',
-          'add',
-          '--body',
-          JSON.stringify({ name: 'x'.repeat(262144) }),
-        ],
+        ['place', 'add', '--body', `@${oversizedFile}`],
         ['group', 'add', '--body', '@/missing/task-body.json'],
       ]) {
         const result = await runBinary(args, env);
