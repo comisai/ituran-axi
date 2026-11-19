@@ -19,6 +19,7 @@ import {
 import { report, safety } from '../commands/reports.ts';
 import { totals, trip, trips } from '../commands/trips.ts';
 import { vehicle, vehicles, where } from '../commands/vehicles.ts';
+import { writeAction, writeRecord } from '../commands/writes.ts';
 import { connected, readSettings } from '../config.ts';
 import { AxiError, usage } from '../errors.ts';
 import { errorText, helpBlock, render } from '../output/toon.ts';
@@ -71,6 +72,22 @@ const WINDOW: Record<string, FlagSpec> = {
   date: { type: 'string', value: '<YYYY-MM-DD>', summary: 'One local day' },
 };
 
+const WRITE_FLAGS: Record<string, FlagSpec> = {
+  body: {
+    type: 'string',
+    value: '<JSON|@file>',
+    summary: 'Complete JSON request body; @file reads a local file',
+  },
+  'dry-run': {
+    type: 'boolean',
+    summary: 'Print the exact request, send nothing (the default)',
+  },
+  confirm: {
+    type: 'boolean',
+    summary: 'Send this record write once; Comis still asks the owner',
+  },
+};
+
 /** A command and the Ituran service whose 403 it can meet, for the home view. */
 type Spec = CommandSpec & { service?: string };
 
@@ -107,8 +124,7 @@ export const COMMANDS: readonly Spec[] = [
         summary: "Also the VIN, IDs and the driver's phone",
       },
     },
-    summary:
-      'One vehicle: position with age in seconds, driver, groups and saved places',
+    summary: 'One vehicle: position, age, driver, groups and places',
     run: vehicle,
   },
   {
@@ -266,8 +282,12 @@ export const COMMANDS: readonly Spec[] = [
   },
   {
     name: 'place',
-    args: [{ name: '<id>', required: true }],
+    args: [
+      { name: '<id|add|edit|remove>', required: true },
+      { name: '<id>', required: false },
+    ],
     flags: {
+      ...WRITE_FLAGS,
       vehicles: { type: 'boolean', summary: 'The vehicles in this place now' },
       refresh: {
         type: 'boolean',
@@ -275,8 +295,48 @@ export const COMMANDS: readonly Spec[] = [
       },
       full: FULL,
     },
-    summary: 'One saved place, and the vehicles in it now',
-    run: place,
+    summary: 'Read a place, or add|edit|remove one',
+    run: (input) => {
+      if (writeAction('place', input.positionals[0]))
+        return writeRecord('place', input);
+      if (
+        input.positionals.length !== 1 ||
+        ['body', 'dry-run', 'confirm'].some(
+          (f) => input.values[f] !== undefined,
+        )
+      )
+        throw usage(
+          'Use place <id> for a read, or place add|edit|remove [id] for a write.',
+        );
+      return place(input);
+    },
+  },
+  {
+    name: 'alert',
+    args: [
+      { name: '<add|edit|remove|custom>', required: true },
+      { name: '<id>', required: false },
+    ],
+    flags: {
+      ...WRITE_FLAGS,
+      plate: {
+        type: 'string',
+        value: '<plate>',
+        summary: 'Create, change or delete an alert on this vehicle',
+      },
+    },
+    summary: 'Add|edit|remove an alert; custom changes contact channels',
+    run: (input) => writeRecord('alert', input),
+  },
+  {
+    name: 'group',
+    args: [
+      { name: '<add|edit|members|remove>', required: true },
+      { name: '<id>', required: false },
+    ],
+    flags: WRITE_FLAGS,
+    summary: 'Add|edit|remove a group; members patches vehicles',
+    run: (input) => writeRecord('group', input),
   },
   {
     name: 'groups',
@@ -382,8 +442,7 @@ export const COMMANDS: readonly Spec[] = [
       page: PAGE,
       full: FULL,
     },
-    summary:
-      'daily, periodic, idle; or speed, events, engine, full, diagnostics, heat-map for plates',
+    summary: 'Vehicle reports: daily, periodic, idle, events and more',
     run: report,
     service: 'reports',
   },
@@ -401,8 +460,7 @@ export const COMMANDS: readonly Spec[] = [
       page: PAGE,
       full: FULL,
     },
-    summary:
-      'Safety grades: totals, vehicles, drivers, groups, periodic, ubi-vehicles, ubi-drivers',
+    summary: 'Safety grades and driving scores',
     run: safety,
     service: 'safety grades',
   },
@@ -524,7 +582,7 @@ function remember(spec: Spec, io: Io, error: AxiError | null): void {
 }
 
 export async function main(argv: string[], io: Io): Promise<number> {
-  const commandDeadline = Date.now() + 25_000;
+  const commandStarted = Date.now();
   let spec: Spec = HOME;
   let usageText = `${BIN} [command] [flags]`;
   try {
@@ -564,13 +622,22 @@ export async function main(argv: string[], io: Io): Promise<number> {
       io.stdout(commandHelp(found));
       return 0;
     }
-    // Help and local logout do not need network serialization. Validate the
+    // Help, logout and write previews need no network serialization. Validate the
     // connection before creating a lock so missing settings stay actionable.
     let out: string;
-    if (spec.name === 'logout') {
+    if (
+      spec.name === 'logout' ||
+      (writeAction(spec.name, parsed.positionals[0]) &&
+        (parsed.values.confirm !== true || parsed.values['dry-run'] === true))
+    ) {
       out = await spec.run({ ...parsed, io });
     } else {
       const settings = connected(io.env);
+      const confirmedWrite =
+        writeAction(spec.name, parsed.positionals[0]) &&
+        parsed.values.confirm === true;
+      const commandDeadline =
+        commandStarted + (confirmedWrite ? 55_000 : 25_000);
       const deadline = Math.min(commandDeadline, settings.deadline ?? Infinity);
       // One deadline covers lock waiting, sign-in, pacing, retries and every
       // page/window. A task deadline further in the future cannot extend it.

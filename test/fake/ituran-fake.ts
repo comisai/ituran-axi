@@ -68,6 +68,14 @@ export interface FakeOptions {
   answerDelayMs?: number;
   /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
   stallProxy?: boolean;
+  /** Write answers, including Gate holds and upstream failures. */
+  /** Drop a write connection after accepting it, to model an uncertain outcome. */
+  writeDrop?: boolean;
+  writeReply?: {
+    status: number;
+    json?: unknown;
+    headers?: Record<string, string>;
+  };
   port?: number;
 }
 
@@ -76,10 +84,13 @@ export interface FakeState {
     method: string;
     path: string;
     query?: string;
+    body?: string;
     auth?: string;
     at: number;
   }>;
   grants: { password: number; refresh: number };
+  effects: Array<{ method: string; path: string; body?: unknown }>;
+  records: Map<string, Row>;
 }
 
 const RLO = String.fromCodePoint(0x202e);
@@ -376,6 +387,8 @@ export async function startFake(options: FakeOptions = {}) {
   const password = options.password ?? 'secret-pass';
   const state: FakeState = {
     requests: [],
+    effects: [],
+    records: new Map(),
     grants: { password: 0, refresh: 0 },
   };
   const tokens = new Set<string>(options.token ? [options.token] : []);
@@ -409,6 +422,7 @@ export async function startFake(options: FakeOptions = {}) {
         at: Date.now(),
         method: req.method ?? 'GET',
         path,
+        ...(body && path !== '/api/v1/oauth/token' ? { body } : {}),
         ...(url.search ? { query: url.search } : {}),
         ...(auth ? { auth } : {}),
       });
@@ -490,6 +504,87 @@ export async function startFake(options: FakeOptions = {}) {
       if (!pressured) {
         pressured = true;
         return send(481, { message: 'Too many requests' });
+      }
+      // Only the record operations the CLI implements; never a device command.
+      const method = req.method ?? 'GET';
+      const collection =
+        /^\/api\/v2\/(places|alerts|vehicle-groups)$/.test(path) ||
+        /^\/api\/v2\/vehicles\/[0-9A-Z]+\/alerts$/.test(path);
+      const record =
+        /^\/api\/v2\/(places|alerts|vehicle-groups)\/\d+$/.test(path) ||
+        /^\/api\/v2\/vehicles\/[0-9A-Z]+\/alerts\/\d+$/.test(path);
+      const custom = /^\/api\/v2\/alerts\/custom\/\d+$/.test(path);
+      const write =
+        (method === 'POST' && collection) ||
+        (['PUT', 'DELETE'].includes(method) && record) ||
+        (method === 'PUT' && custom) ||
+        (method === 'PATCH' && /^\/api\/v2\/vehicle-groups\/\d+$/.test(path));
+      if (write) {
+        if (options.writeDrop) {
+          state.effects.push({
+            method,
+            path,
+            ...(body ? { body: parsed } : {}),
+          });
+          req.socket.destroy();
+          return;
+        }
+        if (options.writeReply) {
+          res.writeHead(options.writeReply.status, {
+            'content-type': 'application/json',
+            ...options.writeReply.headers,
+          });
+          return res.end(JSON.stringify(options.writeReply.json));
+        }
+        if (
+          method === 'DELETE'
+            ? body !== ''
+            : !body || !parsed || Array.isArray(parsed)
+        )
+          return send(400, {
+            error_code: '400',
+            error_description: 'Invalid write body.',
+          });
+        state.effects.push({ method, path, ...(body ? { body: parsed } : {}) });
+        if (method === 'POST') {
+          const id = 100 + state.effects.length;
+          state.records.set(`${path}/${id}`, parsed);
+          return send(200, {
+            [path.endsWith('/places')
+              ? 'place_id'
+              : path.endsWith('/vehicle-groups')
+                ? 'vehicle_group_id'
+                : 'alert_id']: id,
+          });
+        }
+        if (method === 'DELETE') {
+          const existed = state.records.delete(path);
+          return existed
+            ? send(200, { result: true })
+            : send(404, {
+                error_code: '404',
+                error_description: 'Record not found.',
+              });
+        }
+        if (method === 'PATCH') {
+          const previous = state.records.get(path) ?? {};
+          const changes = parsed.license_plates as
+            | { add?: string[]; remove?: string[] }
+            | undefined;
+          const plates = new Set(
+            previous.license_plates as string[] | undefined,
+          );
+          for (const plate of changes?.add ?? []) plates.add(plate);
+          for (const plate of changes?.remove ?? []) plates.delete(plate);
+          state.records.set(path, {
+            ...previous,
+            ...parsed,
+            license_plates: [...plates],
+          });
+          return send(200, { result: true, failed_vehicles: [] });
+        }
+        state.records.set(path, parsed);
+        return send(200, custom ? {} : { result: true });
       }
       const q = url.searchParams;
       const rt = q.getAll('realtime_fields');

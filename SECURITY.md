@@ -24,7 +24,7 @@ Never include real passwords, tokens, plates, names or positions. The maintainer
 **In scope:**
 - A password or token appearing in output, errors, logs, or files other than the token cache.
 - The token cache readable by other users, or reused for a different account or API root.
-- Any request that is not a read: a write, a device command, or a POST to a route outside `READ_POSTS`.
+- Any request outside the read allowlist and the 14 record writes in `src/http.ts`, any write sent without `--confirm`, or any device, driver, contact or drive-share request.
 - A request sent to a host other than the configured API root.
 - A bypass of the text-safety layer: invisible or bidirectional characters, or credential-like values, passing through unescaped.
 - Phone numbers or e-mail addresses shown without `--full` or `--fields`.

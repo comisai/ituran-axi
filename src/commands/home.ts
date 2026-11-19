@@ -13,7 +13,7 @@ import {
 } from './common.ts';
 
 export const DESCRIPTION =
-  'Read Ituran vehicle tracking: vehicles, positions, trips, drivers, saved places, events and reports';
+  'Read Ituran tracking; preview or confirm place, alert and group writes';
 
 export async function home(input: CommandInput): Promise<string> {
   const ctx = open(input);

@@ -1,5 +1,7 @@
 # ituran-axi: design for Comis
 
+This historical plan describes the read-only releases. Version 0.2.0 adds confirmed place, alert and vehicle-group writes; see the [current commands](../README.md#change-a-place-alert-or-vehicle-group). Writes are proved on fakes only; the owner performs the QA-account run.
+
 | | |
 | --- | --- |
 | Status | Built and qualified for reads. Every command passes the live gate on production (`--strict --deep --parity`, 2026-11-08). Comis custody waits on two Gate decisions (C1, C2). |

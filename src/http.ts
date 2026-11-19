@@ -1,7 +1,7 @@
 // HTTP to Ituran, directly or through the Comis Gate (HTTPS_PROXY with
-// NODE_USE_ENV_PROXY=1, set by the Comis wrapper). Only reads leave: GET, and
-// POST to the closed list of routes Ituran serves reads on. Anything else is
-// refused before any network I/O.
+// NODE_USE_ENV_PROXY=1, set by the Comis wrapper). Reads and the closed list
+// of place, alert and vehicle-group writes have separate entry points.
+// Writes are sent once: no auth renewal, retry, or redirect replay.
 
 import type { Auth, Settings } from './config.ts';
 import {
@@ -10,6 +10,7 @@ import {
   type ClassifyContext,
   classify,
   ituranCodes,
+  ituranMessage,
 } from './errors.ts';
 import { parseJson } from './json.ts';
 import { Pace } from './pace.ts';
@@ -80,6 +81,8 @@ export interface Session {
   header(): Promise<string>;
   /** After a 401: true when a fresh token is worth exactly one more try. */
   renew(used: string): Promise<boolean>;
+  /** Forget a refused cached token, without signing in or replaying a write. */
+  invalidate?(used: string): Promise<void>;
 }
 
 export function isRead(
@@ -97,7 +100,46 @@ export function isRead(
   );
 }
 
-function urlOf(settings: Settings, read: Read): URL {
+export function writeBody(body: unknown): string {
+  return JSON.stringify(body).replace(
+    /[\u007f-\uffff]/g,
+    (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+export interface WriteAnswer {
+  status: number;
+  json: unknown;
+}
+
+const UNCERTAIN_WRITE =
+  "The write may have been applied, or may be waiting for the owner's card. Do not repeat it. Check `comis action list`, or read `ituran-axi places`, `ituran-axi alerts` or `ituran-axi groups` first.";
+
+export interface Write {
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  body?: unknown;
+}
+
+/** Exactly the v2 record writes. No device, driver, contact or account route. */
+export function isWrite(method: string, path: string): boolean {
+  if (method === 'POST')
+    return (
+      /^\/api\/v2\/(places|alerts|vehicle-groups)$/.test(path) ||
+      /^\/api\/v2\/vehicles\/[0-9A-Z]{1,12}\/alerts$/.test(path)
+    );
+  if (method === 'PUT' || method === 'DELETE')
+    return (
+      /^\/api\/v2\/(places|alerts|vehicle-groups)\/\d{1,20}$/.test(path) ||
+      /^\/api\/v2\/vehicles\/[0-9A-Z]{1,12}\/alerts\/\d{1,20}$/.test(path) ||
+      (method === 'PUT' && /^\/api\/v2\/alerts\/custom\/\d{1,20}$/.test(path))
+    );
+  return (
+    method === 'PATCH' && /^\/api\/v2\/vehicle-groups\/\d{1,20}$/.test(path)
+  );
+}
+
+function urlOf(settings: Settings, read: { path: string; query?: Query }): URL {
   const url = new URL(`${settings.origin}${read.path}`);
   for (const [key, value] of Object.entries(read.query ?? {})) {
     if (value === undefined) continue;
@@ -216,6 +258,94 @@ export class Client {
         Math.min(READ_TIMEOUT_MS, timeLeft(this.settings, this.now)),
       ),
     );
+  }
+
+  /** A confirmed record write. Never replay a request, even after 401 or 503. */
+  async write(write: Write): Promise<WriteAnswer> {
+    if (
+      !isWrite(write.method, write.path) ||
+      (write.method === 'DELETE'
+        ? write.body !== undefined
+        : write.body === undefined)
+    ) {
+      throw new AxiError(
+        'internal_error',
+        'ituran-axi refused an unsupported write request.',
+      );
+    }
+    const header = await this.session.header();
+    let answer: Answer;
+    try {
+      answer = await this.pace.run(() =>
+        fetchAnswer(
+          this.deps,
+          urlOf(this.settings, write),
+          {
+            method: write.method,
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': `ituran-axi/${VERSION}`,
+              Authorization: header,
+              ...(write.body !== undefined
+                ? { 'Content-Type': 'application/json' }
+                : {}),
+            },
+            ...(write.body !== undefined
+              ? { body: writeBody(write.body) }
+              : {}),
+          },
+          Math.min(READ_TIMEOUT_MS, timeLeft(this.settings, this.now)),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof AxiError && error.code === 'unreachable')
+        throw new AxiError('unreachable', UNCERTAIN_WRITE, {
+          detail: error.message,
+        });
+      throw error;
+    }
+    if (answer.status === 401 && !answer.headers.get('comis-refusal')) {
+      try {
+        await this.session.invalidate?.(header);
+      } catch {
+        /* preserve the refusal if cache cleanup fails */
+      }
+    }
+    const codes = ituranCodes(answer.json);
+    const said = ituranMessage(answer.json);
+    // Only an ordinary record-not-found answer means the goal is reached.
+    if (
+      write.method === 'DELETE' &&
+      answer.status === 404 &&
+      !answer.headers.get('comis-refusal') &&
+      codes.length > 0 &&
+      codes.every((code) => code === '404')
+    )
+      return {
+        status: 404,
+        json: {
+          result: true,
+          already_absent: true,
+          ...(said ? { ituran: said } : {}),
+          ...(codes.length ? { codes: codes.join(' ') } : {}),
+        },
+      };
+    const error = classify(answer, { what: 'record write' });
+    if (error) {
+      throw new AxiError(
+        error.code,
+        answer.status >= 500 && error.code !== 'held_for_approval'
+          ? UNCERTAIN_WRITE
+          : error.message,
+        {
+          ...error.fields,
+          status: answer.status,
+          ...(codes.length ? { codes: codes.join(' ') } : {}),
+          ...(said ? { ituran: said } : {}),
+        },
+      );
+    }
+    return { status: answer.status, json: answer.json };
   }
 
   /** One read: its JSON, null for an empty 404 where allowed, or a classified error. */

@@ -266,6 +266,16 @@ class PasswordSession implements Session {
     return `Bearer ${(this.current as Cached).access_token}`;
   }
 
+  async invalidate(used: string): Promise<void> {
+    await this.withLock(async () => {
+      const cached = this.readCache();
+      if (cached && `Bearer ${cached.access_token}` === used)
+        rmSync(this.file, { force: true });
+      if (this.current && `Bearer ${this.current.access_token}` === used)
+        this.current = null;
+    });
+  }
+
   async renew(used: string): Promise<boolean> {
     if (this.renewed) return false;
     this.renewed = true;

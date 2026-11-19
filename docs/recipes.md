@@ -7,7 +7,7 @@ needs every row: add `--full` (default output stops at about 4,000 characters)
 and a `--limit` that covers the total in the summary line. Reports and safety
 grades take at most 1,000 rows a page.
 
-Run commands in sequence. Commands for the same host user take a process lock, with a 400 ms gap between commands. The lock directory defaults to `/tmp/ituran-axi-<uid>`, independent of per-command temporary and cache directories. Wrappers with private filesystem namespaces must set `ITURAN_AXI_LOCK_DIR` to one writable directory shared by every command. If the selected directory is unavailable, reads continue without process locking. Separate users or hosts need external coordination. Abandoned locks recover automatically. A concurrent command waits within its 25-second overall budget (less when `COMIS_DEADLINE` is earlier), then returns `busy` if the lock is still held. Other timeouts return `unreachable`; ask for a shorter window before trying again. `trips`, including `--by plate`, accepts at most 56 days; `--limit` only limits output rows.
+Run commands in sequence. Commands for the same host user take a process lock, with a 400 ms gap between commands. The lock directory defaults to `/tmp/ituran-axi-<uid>`, independent of per-command temporary and cache directories. Wrappers with private filesystem namespaces must set `ITURAN_AXI_LOCK_DIR` to one writable directory shared by every command. If the selected directory is unavailable, reads continue without process locking. Separate users or hosts need external coordination. Abandoned locks recover automatically. A concurrent read waits within its 25-second overall budget; a confirmed write has 55 seconds overall and waits at most 30 seconds for the lock. An earlier `COMIS_DEADLINE` shortens either budget. Lock contention returns `busy` without sending a request. Other read timeouts return `unreachable`; ask for a shorter window before trying again. A write timeout can follow an applied change or a pending card: do not repeat it; inspect Comis actions or read the account first. `trips`, including `--by plate`, accepts at most 56 days; `--limit` only limits output rows.
 
 **Vehicles not seen for two days**
 ```sh
@@ -135,3 +135,54 @@ meter consistency before classifying service needs. Diagnostic summaries count
 all fetched readings, while the table is one page. Follow its next-page hint and
 check each reading's age. Pages re-read current data and can shift between calls.
 An old sample is not a current health assessment.
+
+## Create, change or remove a saved place
+
+Preview the complete request before sending it. These examples use neutral test records. Writes have been tested on fakes only; the owner performs the QA-account run.
+
+```sh
+ituran-axi place add --body '{"name":"Depot A","place_type":"Circle","point":{"latitude":32.1,"longitude":34.8},"radius":150}' --dry-run
+```
+
+Run the same command with `--confirm` instead of `--dry-run` to send it once. Its response gives the new `place_id`. Use that ID to edit or remove it:
+
+```sh
+ituran-axi place edit 101 --body '{"name":"Depot B","place_type":"Circle","point":{"latitude":32.1,"longitude":34.8},"radius":200}' --dry-run
+ituran-axi place remove 101 --dry-run
+```
+
+A change sends every field in the body, without reading or merging the old record. A delete sends no body. You can also keep the complete body in a local file and give `--body @request.json`.
+
+## Set an alert for existing contacts
+
+Find the account's alerts with `ituran-axi alerts`; alert recipients must already be contacts in Ituran. The CLI cannot create or change contacts.
+
+```sh
+ituran-axi alert add --body '{"alert_name":"Night use","event_type":"Ignition","alert_contacts":[7,8],"license_plates":["10000001"],"vehicle_group_ids":[301]}' --dry-run
+ituran-axi alert edit 201 --body @alert.json --dry-run
+ituran-axi alert custom 201 --body '{"contact_id":7,"is_send_push":true,"is_send_sms":false,"is_send_email":false}' --dry-run
+ituran-axi alert remove 201 --dry-run
+```
+
+For an alert attached to one vehicle, give its plate on add, edit or remove:
+
+```sh
+ituran-axi alert add --plate 10000001 --body @alert.json --dry-run
+ituran-axi alert edit 201 --plate 10000001 --body '{"speed_exceeds":90}' --dry-run
+ituran-axi alert remove 201 --plate 10000001 --dry-run
+```
+
+## Change a vehicle group and its members
+
+Read `ituran-axi groups` for IDs and `ituran-axi groups 301` for the current listed plates. A membership change affects the group; it sends no command to a vehicle.
+
+```sh
+ituran-axi group add --body '{"vehicle_group_name":"North","icon_id":2,"parent_group_id":1,"license_plates":["10000001"]}' --dry-run
+ituran-axi group edit 301 --body '{"vehicle_group_name":"North depot","icon_id":2,"parent_group_id":1,"license_plates":["10000001"]}' --dry-run
+ituran-axi group members 301 --body '{"license_plates":{"add":["10000002"],"remove":["10000001"]}}' --dry-run
+ituran-axi group remove 301 --dry-run
+```
+
+Replace `--dry-run` with `--confirm` only after checking the request. In Comis each write still waits for the owner's card. When output says `held_for_approval`, run the printed `comis action wait <id>` command; do not resend the write. Declined or expired writes are refused. Earlier Comis connections stay read-only until the owner disconnects and reconnects Ituran.
+
+Writes never retry automatically. Repeating an edit, membership patch or delete requests the same final state; an explicit plain record-not-found code `404` on deletion returns `already_absent: true` with its status and Ituran's words. An unknown vehicle or another error code remains an error. A repeated `add` can create another record. A timeout, dropped connection or server error can mean the write was applied or is still waiting for the owner's card. Do not repeat it: check `comis action list` or read `ituran-axi places`, `ituran-axi alerts` or `ituran-axi groups` first. An incomplete result exits 1 with a failed-vehicle count and a bounded list of plate keys; contact details are never echoed. In Comis, owner cards above about 4,000 characters are refused even if the local preview fits. Device commands, driver changes, drive sharing and contact writes are never available and have no approval path.

@@ -4,17 +4,17 @@
 [![npm](https://img.shields.io/npm/v/ituran-axi.svg)](https://www.npmjs.com/package/ituran-axi)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A read-only command-line tool that lets AI agents read Ituran vehicle tracking: vehicles and their positions, trips, drivers, saved places, events, alerts, sensor readings, reports and safety grades.
+A command-line tool that lets AI agents read Ituran vehicle tracking: vehicles and their positions, trips, drivers, saved places, events, alerts, sensor readings, reports and safety grades. It can also create, change and delete saved places, alerts and vehicle groups.
 
 ituran-axi is an AXI, an [agent experience interface](https://axi.md). Every command:
 - prints compact [TOON](https://github.com/toon-format/toon) text on stdout, bounded in size;
 - refuses bad input and says exactly what is wrong;
 - ends with hints for the next command, as a TOON list, so the whole output decodes as one document;
-- only reads. It never changes Ituran settings or sends commands to a vehicle.
+- previews every write unless `--confirm` is given. It never sends a device command, changes a driver, writes a contact or shares a drive.
 
-It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents that have a shell: 24 commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It was built to run inside Comis, behind the Comis Gate, and it also works on its own.
+It replaces [`ituran-mcp`](https://github.com/ituranlabs/ituran-mcp) for agents that have a shell: compact commands instead of 152 tool schemas, which cost about 43,000 tokens per conversation. It was built to run inside Comis, behind the Comis Gate, and it also works on its own.
 
-> **Status:** early development (0.x). Command families have been checked against production. New changes are tested against a fake Ituran; see each pull request for live-validation coverage.
+> **Status:** early development (0.x). Reads have been checked against production. Writes are proved on fakes only; the QA-account run waits for the owner. See each pull request for validation coverage.
 
 ## Requirements
 
@@ -54,6 +54,9 @@ ituran-axi odometer <plate>... | --all      GPS odometer estimates with their re
 ituran-axi centers [--near <plate|lat,lon>] Ituran service centers, nearest first
 ituran-axi drivers [<text>] | driver <id>
 ituran-axi places [<text>] | place <id> [--vehicles]
+ituran-axi place add|edit|remove [<id>] [--body <JSON|@file>] [--dry-run|--confirm]
+ituran-axi alert add|edit|remove|custom [<id>] [--plate <plate>] [--body <JSON|@file>] [--dry-run|--confirm]
+ituran-axi group add|edit|members|remove [<id>] [--body <JSON|@file>] [--dry-run|--confirm]
 ituran-axi groups [<id>] [--vehicles]
 ituran-axi events [--all] | event <id>      event states, and the vehicles in each now
 ituran-axi alerts [--plate <plate>]         alert definitions
@@ -98,6 +101,33 @@ usage: "ituran-axi vehicle <plate> [--full]"
 
 [`docs/round2-gaps.md`](docs/round2-gaps.md) records the API evidence and remaining limits. [`docs/recipes.md`](docs/recipes.md) has tested shell combinations for common questions about the vehicles.
 
+### Change a place, alert or vehicle group
+
+`add` creates a record and takes no ID. `edit` changes the numeric ID you name; send the full body Ituran expects for that change. `remove <id>` sends no body. `group members <id>` patches membership. `alert ... --plate <plate>` uses that vehicle's alert route. `alert custom <id>` changes how an alert tells an existing contact and takes no `--plate`.
+
+Give the request as `--body '{...}'` or `--body @request.json`. Every body field is sent as provided, including nested objects and arrays; nothing is inferred from a saved record or silently omitted. Use these field names:
+
+| Record | Body fields |
+| --- | --- |
+| Place | `name`, `description`, `place_type`, `point`, `points`, `radius`, `width`, `layer_id`. A circle uses `point: {"latitude": ..., "longitude": ...}` and `radius`. |
+| Alert | `alert_name`, `alert_description`, `event_type`, `alert_status`, `always_on`, `time_filtering`, `alert_contacts`, `license_plates`, `vehicle_group_ids`, `speed_exceeds`, `place_alert`. Contacts must already exist in the account. |
+| Custom alert | `contact_id`, `is_send_push`, `is_send_sms`, `is_send_email` |
+| Vehicle group | `vehicle_group_id`, `vehicle_group_name`, `icon_id`, `parent_group_id`, `license_plates` |
+| Membership patch | `license_plates: {"add": ["10000002"], "remove": ["10000001"]}` |
+
+Ituran validates which fields a particular record needs. IDs above JavaScript's safe integer range must be quoted JSON strings. An invalid JSON body is refused locally.
+
+```sh
+ituran-axi place add --body '{"name":"Depot A","place_type":"Circle","point":{"latitude":32.1,"longitude":34.8},"radius":150}' --dry-run
+ituran-axi group members 301 --body '{"license_plates":{"add":["10000002"],"remove":["10000001"]}}' --dry-run
+```
+
+The default and `--dry-run` print the method, URL and complete `body_json`, with no sign-in or network request. `body_json` is the exact request body, with non-ASCII characters represented by JSON escapes. In Comis, an owner card above about 4,000 characters is refused even if the local preview fits. Previews are never shortened or masked: a body that looks like a credential or a preview above 256 KB is refused. Replace `--dry-run` with `--confirm` to send the same request once. Confirmation is explicit and never prompts. In Comis, the write still waits for the owner's card; a held action returns `held_for_approval` and `comis action wait <id>`. Do not submit it again.
+
+Writes never retry, refresh authentication after a refusal, or follow redirects. Edits and membership patches set the requested state; an explicit plain record-not-found code `404` on removal succeeds with `already_absent: true` and preserves its HTTP status and Ituran's words. Other 404 codes, including an unknown vehicle, remain errors. Creates have no upstream idempotency key: repeating a confirmed `add` can create another record. A timeout, connection drop or server failure says the write may have been applied or may still be waiting for the owner's card. Do not repeat it: check `comis action list` or read the account first. A 401 drops a matching cached token without signing in again or replaying the write. A create's receipt includes its new ID; errors preserve Ituran's code and description. Receipts print only allowed IDs and result fields, with bounded output. An incomplete result (`result: false` or failed vehicles) exits 1 with `write_incomplete`, a failed-vehicle count and at most 20 plate keys. Echoed contacts and their names, phones and emails are omitted. Successful place writes clear the local place-name index.
+
+Device commands, including moving, immobilizing or unlocking a vehicle and changing its driver, are never available. Contact writes and drive sharing are also unavailable. No confirmation flag enables them.
+
 ### Ituran's own rules
 
 ituran-axi handles these, and says so in its output where it matters:
@@ -111,17 +141,17 @@ ituran-axi handles these, and says so in its output where it matters:
 - Keypad driver codes above 2^53 stay exact.
 - A model year or odometer of 0 means "not set".
 
-Commands for the same host user run their HTTP reads one command at a time, including sign-in. Requests within a command keep the existing limit of two in flight, starting at least 400 ms apart. The next command waits at least 400 ms after the previous command finishes. The command lock is `/tmp/ituran-axi-<uid>/command.lock`, independent of `TMPDIR`, `HOME` and `XDG_CACHE_HOME`. Set `ITURAN_AXI_LOCK_DIR` to override its directory. Wrappers with separate filesystem namespaces must set this to the same writable directory shared by every command; keep it stable across accounts and tokens. A busy lock returns `busy` without sending a request. Wait for the other command to finish before trying again.
+Commands for the same host user run their HTTP requests one command at a time, including sign-in. Requests within a command keep the existing limit of two in flight, starting at least 400 ms apart. The next command waits at least 400 ms after the previous command finishes. The command lock is `/tmp/ituran-axi-<uid>/command.lock`, independent of `TMPDIR`, `HOME` and `XDG_CACHE_HOME`. Set `ITURAN_AXI_LOCK_DIR` to override its directory. Wrappers with separate filesystem namespaces must set this to the same writable directory shared by every command; keep it stable across accounts and tokens. A busy lock returns `busy` without sending a request. Wait for the other command to finish before trying again.
 
 The lock records its owner's PID, hostname and a random token. The holder refreshes its heartbeat every two seconds. A dead PID on the same host, or a heartbeat missing for ten seconds, permits automatic recovery. Release checks the owner token, so an old holder cannot remove a replacement lock. If the selected lock directory is unavailable, reads continue without a process lock, with the same output. Cleanup errors never replace a successful result. Separate users and hosts need external coordination; the gap between commands also depends on writable lock storage.
 
-Network commands have a 25-second overall budget, including lock waiting, sign-in, pacing, retries and all pages or windows. `COMIS_DEADLINE` can shorten this budget, with a one-second margin for output and cleanup. Reads and sign-in also have individual timeouts (60 and 30 seconds), shortened to the remaining command budget. Timeouts cover the response body, abort the request and cancel the body. The CLI flushes its error and exits, releasing Node's proxy dispatcher sockets even if a proxy has not answered CONNECT.
+Reads have a 25-second overall budget; confirmed writes have 55 seconds to accommodate the Comis Gate's 45-second card hold. Each budget includes lock waiting, sign-in, pacing and requests (plus retries and pages for reads). Lock contention waits at most 30 seconds and uses up part of the command budget, so it can leave less time for a card. `COMIS_DEADLINE` can shorten this budget, with a one-second margin for output and cleanup. HTTP requests and sign-in also have individual timeouts (60 and 30 seconds), shortened to the remaining command budget. Timeouts cover the response body, abort the request and cancel the body. The CLI flushes its error and exits, releasing Node's proxy dispatcher sockets even if a proxy has not answered CONNECT.
 
 `trips` accepts at most 56 days per command, including `--by plate`. Longer ranges return a usage error before any trip requests. Split them into shorter windows. `--limit` limits output rows; calculating the exact count still reads each weekly window. This bound keeps counts, page hints and totals consistent for accepted windows.
 
 ## Output and errors
 
-- **Size:** a value is cut at 500 characters and the whole output at about 4,000. `--full` lifts both limits, up to 256 KB.
+- **Size for reads:** a value is cut at 500 characters and the whole output at about 4,000. `--full` lifts both limits, up to 256 KB.
 - **Text safety:** invisible and bidirectional control characters are shown as `\uXXXX`, and values that look like credentials are withheld.
 - **Personal data:** phone numbers and e-mail addresses appear only with `--full` or `--fields`.
 - **Errors** print `message`, `code` and `usage` on stdout.
@@ -138,13 +168,15 @@ Network commands have a 25-second overall budget, including lock waiting, sign-i
 | `rejected` | Ituran refused the request; its message is shown |
 | `rate_limited`, `ituran_error`, `unreachable` | Ituran limited the request, failed, or could not be reached |
 | `busy` | Another local command holds the process lock. Wait for it to finish before trying again. |
+| `write_incomplete` | Ituran did not complete the write; inspect the account and the failed-vehicle count before making another change |
+| `held_for_approval` | The write waits for the owner; run the printed `comis action wait` command and do not retry |
 | `reconnect_needed`, `refused` | Inside Comis: the owner must reconnect, or the Gate refused |
 | `output_too_large` | Even `--full` would exceed 256 KB; narrow the query |
 | `internal_error` | A bug in ituran-axi; please [report it](https://github.com/comisai/ituran-axi/issues) |
 
 ## Comis
 
-Comis ships `ituran-axi` in its `apps` pack, with the `ituran-read` skill and the `ituran` Gate service in its own repository. Inside Comis, the Gate signs in to Ituran and holds the token, and the agent's workbench never sees the password or the token. [`test/fixtures/comis-ituran-entry.json`](test/fixtures/comis-ituran-entry.json) is a copy of that Gate service; `test/contract/gate-entry.test.ts` checks that every request the AXI sends gets the token as a read, and that sign-in, device commands and writes are denied.
+Comis ships `ituran-axi` in its `apps` pack, with the `ituran-read` skill and the `ituran` Gate service in its own repository. Inside Comis, the Gate signs in to Ituran and holds the token, and the agent's workbench never sees the password or the token. [`test/fixtures/comis-ituran-entry.json`](test/fixtures/comis-ituran-entry.json) is a copy of that Gate service; `test/contract/gate-entry.test.ts` checks read credentials and the denied device, driver, contact and sign-in routes. The write contract tests check that all 14 record writes get credentials and require an owner card. Connections made before these writes stay read-only until the owner runs `comis disconnect ituran`, then `comis connect ituran`. The Comis client pin and `ituran-write` skill follow this release in a separate Comis change.
 
 ## Development
 
