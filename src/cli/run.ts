@@ -273,7 +273,7 @@ export const COMMANDS: readonly Spec[] = [
         type: 'boolean',
         summary: 'Rebuild the local index of place names now',
       },
-      limit: LIMIT,
+      limit: { ...LIMIT, summary: 'Rows to show, 1 to 500, default 20' },
       page: PAGE,
       full: FULL,
     },

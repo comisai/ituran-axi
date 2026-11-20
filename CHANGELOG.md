@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — 2026-11-20
+
+- Cap `places --limit` at 500 for listings and name searches, returning a usage error before requests for larger values. The true service maximum is not established by the repository evidence; 500 is the conservative fallback already used by the name index. Use `--page` for more rows.
+
 ## 0.2.1 — 2026-11-20
 
 - Make reads follow the caller's `COMIS_DEADLINE`, keeping the 25-second default when no deadline is supplied. Confirmed writes keep at most 55 seconds or the earlier caller deadline.

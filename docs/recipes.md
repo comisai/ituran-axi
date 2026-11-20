@@ -109,8 +109,8 @@ ituran-axi places <name> --refresh
 ituran-axi report events <plate> --place <id> --date <YYYY-MM-DD> --limit 2000 --full
 ```
 Name lookup reads the complete saved-place index, including places beyond the
-first listing page. An unfiltered `places --limit 200` is a page, not the entire
-catalog; follow the next-page hint. Place events are dated evidence of presence,
+first listing page. `places --limit` accepts 1 to 500; use `--page` for later
+rows. An unfiltered `places --limit 200` is a page, not the entire catalog; follow the next-page hint. Place events are dated evidence of presence,
 not complete visits or exact arrival/departure intervals. Reports require explicit
 plates; repeat for the vehicles of interest. If more records exist at the maximum
 limit, narrow the time window.
