@@ -66,6 +66,8 @@ export interface FakeOptions {
   strayFleet?: boolean;
   /** Delay every answer to expose overlapping processes. */
   answerDelayMs?: number;
+  /** Limit the answer delay to this path when set. */
+  answerDelayPath?: string;
   /** Accept proxy CONNECT without answering, like an unresponsive Gate. */
   stallProxy?: boolean;
   /** Write answers, including Gate holds and upstream failures. */
@@ -442,7 +444,10 @@ export async function startFake(options: FakeOptions = {}) {
           res.writeHead(status, { 'content-type': 'application/json' });
           res.end(json === undefined ? '' : JSON.stringify(json));
         };
-        if (options.answerDelayMs) {
+        if (
+          options.answerDelayMs &&
+          (!options.answerDelayPath || options.answerDelayPath === path)
+        ) {
           const timer = setTimeout(answer, options.answerDelayMs);
           res.on('close', () => clearTimeout(timer));
         } else answer();
@@ -1122,7 +1127,11 @@ export async function startFake(options: FakeOptions = {}) {
           },
         });
       }
-      if (req.method === 'POST' && path === '/api/v2/safety/vehicles') {
+      if (
+        req.method === 'POST' &&
+        (path === '/api/v2/safety/vehicles' ||
+          path === '/api/v2/safety/drivers')
+      ) {
         return list(
           PLATES.slice(0, 4).map((p) => ({
             metadata: { license_plate: p, driver_codes: ['105'] },

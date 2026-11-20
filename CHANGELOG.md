@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-11-20
+
+- Make reads follow the caller's `COMIS_DEADLINE`, keeping the 25-second default when no deadline is supplied. Confirmed writes keep at most 55 seconds or the earlier caller deadline.
+
 ## 0.2.0 — 2026-11-19
 
 - Add saved-place create, change and delete commands.

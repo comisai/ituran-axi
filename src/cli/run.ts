@@ -536,7 +536,7 @@ export function topHelp(): string {
       summary: c.summary,
     })),
     settings:
-      'ITURAN_TOKEN, or ITURAN_USERNAME and ITURAN_PASSWORD; ITURAN_URL (default https://api.ituran.com/api/v2)',
+      'ITURAN_TOKEN or ITURAN_USERNAME+ITURAN_PASSWORD; ITURAN_URL; COMIS_DEADLINE (epoch ms; reads default to 25 s)',
   })}\n${helpBlock([`Run \`${BIN} help <command>\` for its flags`])}`;
 }
 
@@ -636,11 +636,11 @@ export async function main(argv: string[], io: Io): Promise<number> {
       const confirmedWrite =
         writeAction(spec.name, parsed.positionals[0]) &&
         parsed.values.confirm === true;
-      const commandDeadline =
-        commandStarted + (confirmedWrite ? 55_000 : 25_000);
-      const deadline = Math.min(commandDeadline, settings.deadline ?? Infinity);
+      const deadline = confirmedWrite
+        ? Math.min(commandStarted + 55_000, settings.deadline ?? Infinity)
+        : (settings.deadline ?? commandStarted + 25_000);
       // One deadline covers lock waiting, sign-in, pacing, retries and every
-      // page/window. A task deadline further in the future cannot extend it.
+      // page/window. Reads follow the caller's deadline when supplied.
       const commandIo = {
         ...io,
         env: { ...io.env, COMIS_DEADLINE: String(deadline) },
