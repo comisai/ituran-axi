@@ -1,2 +1,2 @@
 // Kept equal to package.json by test/unit/version.test.ts.
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';

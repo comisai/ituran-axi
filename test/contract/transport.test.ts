@@ -223,33 +223,121 @@ describe('transport lifecycle across real CLI processes', () => {
     }
   });
 
-  it('bounds stalled commands without a task deadline and with a later task deadline', async () => {
+  it('bounds stalled reads without a task deadline', async () => {
     const fake = await startFake({ stall: 'headers', token: 'fake-token' });
     try {
-      await Promise.all(
-        [false, true].map(async (laterDeadline) => {
-          const started = Date.now();
-          const result = await boundedRun(
-            ['trips', '12345678', '--since', '7d', '--limit', '5'],
-            fakeEnv(fake.url, {
-              ITURAN_TOKEN: 'fake-token',
-              ...(laterDeadline
-                ? { COMIS_DEADLINE: String(Date.now() + 120_000) }
-                : {}),
-            }),
-            30_000,
-          );
-          assert.equal(result.signal, null, JSON.stringify(result));
-          assert.equal(result.code, 1, result.stdout);
-          assert.match(result.stdout, /^code: unreachable$/m);
-          assert.match(result.stdout, /Ituran did not answer within/);
-          assert.ok(
-            Date.now() - started < 27_000,
-            'overall budget must stay well inside 30 seconds',
-          );
-        }),
+      const started = Date.now();
+      const result = await boundedRun(
+        ['trips', '12345678', '--since', '7d', '--limit', '5'],
+        fakeEnv(fake.url, { ITURAN_TOKEN: 'fake-token' }),
+        30_000,
       );
-      assert.equal(fake.state.requests.length, 2);
+      assert.equal(result.signal, null, JSON.stringify(result));
+      assert.equal(result.code, 1, result.stdout);
+      assert.match(result.stdout, /^code: unreachable$/m);
+      assert.match(result.stdout, /Ituran did not answer within/);
+      assert.ok(
+        Date.now() - started < 27_000,
+        'default overall budget must stay well inside 30 seconds',
+      );
+      assert.equal(fake.state.requests.length, 1);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it('allows 30-second safety and scoped idle answers under a 60-second task deadline', async () => {
+    await Promise.all(
+      [
+        {
+          args: [
+            'safety',
+            'drivers',
+            '--from',
+            '2026-11-09',
+            '--to',
+            '2026-11-15',
+          ],
+          path: '/api/v2/safety/drivers',
+          summary: /rows of safety drivers/,
+        },
+        {
+          args: ['report', 'idle', '--group', '2', '--date', '2026-11-15'],
+          path: '/api/v2/reports/bi/idle_percentage/vehicles',
+          summary: /group_vehicles: 2/,
+        },
+      ].map(async ({ args, path, summary }) => {
+        const fake = await startFake({
+          token: 'fake-token',
+          answerDelayMs: 30_000,
+          answerDelayPath: path,
+        });
+        const env = fakeEnv(fake.url, {
+          ITURAN_TOKEN: 'fake-token',
+          COMIS_DEADLINE: String(Date.now() + 60_000),
+        });
+        try {
+          const result = await boundedRun(args, env, 65_000);
+          assert.equal(result.signal, null, JSON.stringify(result));
+          assert.equal(result.code, 0, result.stdout);
+          assert.match(result.stdout, summary);
+          assert.equal(
+            fake.state.requests.filter((r) => r.path === path).length,
+            1,
+          );
+          assert.equal(
+            existsSync(
+              join(env.XDG_CACHE_HOME as string, 'ituran-axi', 'command.lock'),
+            ),
+            false,
+          );
+          await sleep(50);
+          assert.equal(
+            fake.activeConnections(),
+            0,
+            'request sockets were released',
+          );
+        } finally {
+          await fake.close();
+        }
+      }),
+    );
+  });
+
+  it('aborts a delayed answer at the task deadline and releases sockets and lock', async () => {
+    const fake = await startFake({
+      token: 'fake-token',
+      answerDelayMs: 30_000,
+    });
+    const deadline = Date.now() + 2500;
+    const env = fakeEnv(fake.url, {
+      ITURAN_TOKEN: 'fake-token',
+      COMIS_DEADLINE: String(deadline),
+    });
+    try {
+      const result = await boundedRun(['drivers'], env);
+      assert.equal(result.signal, null, JSON.stringify(result));
+      assert.equal(result.code, 1, result.stdout);
+      assert.match(result.stdout, /^code: unreachable$/m);
+      assert.match(result.stdout, /Ituran did not answer within/);
+      assert.ok(
+        Date.now() < deadline,
+        'cleanup must finish before the caller deadline',
+      );
+      assert.ok(result.exitDelay < 800, `exit delayed ${result.exitDelay} ms`);
+      assert.equal(fake.state.requests.length, 1, 'no retry');
+      assert.equal(
+        existsSync(
+          join(env.XDG_CACHE_HOME as string, 'ituran-axi', 'command.lock'),
+        ),
+        false,
+      );
+      await sleep(50);
+      assert.equal(
+        fake.activeConnections(),
+        0,
+        'request sockets were released',
+      );
     } finally {
       await fake.close();
     }
