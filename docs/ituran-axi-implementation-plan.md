@@ -79,7 +79,7 @@ All of these are in `ituran-axi-design.md`.
 | F10 | Plates are digits, 7 or 8 long | A plate always fits one path segment. Input is normalized and checked locally. |
 | F11 | Node trusts the production TLS chain | No CA launcher. `ituran-mcp`'s `start.js` is dropped. |
 | F12 | `realtime_fields=LastLocation\|Driver\|Places` on `GET /vehicles`, `GET /vehicles/{plate}` and `POST /vehicles/search` returns the position with its address, the driver and the saved places in one read | `vehicle` is one request. `where --all` is one or two. `place --vehicles` uses the place lists, which answers Q7. The batch-location route is not needed. |
-| F13 | BI reports and safety grades refuse `page_size` above 1,000 ("must be between 1 and 1000"); other routes take 2,000 | Those commands cap `--limit` at 1,000 and page at 1,000. Found by running the skill's recipes live. |
+| F13 | BI reports and safety grades refuse `page_size` above 1,000 ("must be between 1 and 1000"); most other routes take 2,000 (places use a conservative 500-row cap; their true maximum is unverified) | Those commands cap `--limit` at 1,000 and page at 1,000. Found by running the skill's recipes live. |
 | F14 | The idle report nests rows in `idle.idle_items`, beside `idle.idle_total` | The rows are read from there, and the total is shown. The fake copies the shape. |
 | F15 | Batch location now returns a top-level `pagination` block, which `ituran-mcp` did not see | Recorded as drift. The AXI does not use the route. |
 | F16 | Default output stops at about 4,000 characters, so a pipeline over every row needs `--full` | The skill's recipes use `--full` and say why. |

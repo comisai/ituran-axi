@@ -78,7 +78,7 @@ Position fields include `age_seconds` alongside the rounded `age`, plus `driver_
 
 `maintenance` preserves its existing columns and adds `next.date`, `next.odometer` and `next.engine_hours` when present. `without_due_target` counts records with no date or positive odometer/engine-hours target. Missing targets do not mean overdue. `diagnostics --page N --limit N` pages the readings after all vehicle pages have been read; each reading retains its own age. Pages re-read current data and can shift between calls. `--full` lifts output size bounds, while `--limit` and `--page` still control rows.
 
-A **window** is `--since 90m|24h|7d`, `--from <t> [--to <t>]`, or `--date YYYY-MM-DD`. Times are local to the account's time zone, which the home view shows, and take the form `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. Ituran answers only up to the present, so a window ends at most 2 minutes ago: an end given with `--to` or `--date` that is later is cut there, and the output's `clamped` line names the end asked for. Whole-day windows end today instead. **Lists** take `--limit`, `--page`, `--fields` and `--full`.
+A **window** is `--since 90m|24h|7d`, `--from <t> [--to <t>]`, or `--date YYYY-MM-DD`. Times are local to the account's time zone, which the home view shows, and take the form `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm`. Ituran answers only up to the present, so a window ends at most 2 minutes ago: an end given with `--to` or `--date` that is later is cut there, and the output's `clamped` line names the end asked for. Whole-day windows end today instead. **Lists** take `--limit`, `--page`, `--fields` and `--full`. `places --limit` accepts 1 to 500, including name searches; use `--page` to continue.
 
 ```console
 $ ituran-axi where --limit 3

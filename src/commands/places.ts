@@ -15,7 +15,6 @@ import {
   type FetchPage,
   intFlag,
   listOutput,
-  MAX_PAGE,
   open,
   type Row,
   recordOutput,
@@ -29,7 +28,8 @@ import {
 import { vehicleRow } from './vehicles.ts';
 
 const INDEX_MAX_AGE_MS = 24 * 3600_000;
-const INDEX_PAGE = 500;
+// Conservative cap matching the name-index page size; the service maximum is unverified.
+const PLACE_PAGE = 500;
 
 interface PlaceIndex {
   builtAt: string;
@@ -80,7 +80,7 @@ async function placeIndex(
   ) {
     return { ...cached, built: false };
   }
-  const all = await walkAll(placesPage(ctx), INDEX_PAGE);
+  const all = await walkAll(placesPage(ctx), PLACE_PAGE);
   if (all.partial)
     throw new AxiError(
       'unreachable',
@@ -106,7 +106,7 @@ const fold = (s: string) =>
 export async function places(input: CommandInput): Promise<string> {
   const ctx = open(input);
   const { values } = input;
-  const limit = intFlag(values.limit, 'limit', 20, 1, MAX_PAGE);
+  const limit = intFlag(values.limit, 'limit', 20, 1, PLACE_PAGE);
   const page = intFlag(values.page, 'page', 1, 1, 100_000);
   const text = input.positionals.join(' ').trim();
   let rows: Row[];
@@ -189,7 +189,7 @@ export async function place(input: CommandInput): Promise<string> {
         rows: rowsOf(json, 'vehicles'),
         total: json === null ? 0 : totalOf(json),
       };
-    }, INDEX_PAGE);
+    }, PLACE_PAGE);
     const inside = all.rows.filter(
       (v) =>
         Array.isArray(v.places) &&

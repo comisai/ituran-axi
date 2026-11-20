@@ -277,3 +277,62 @@ it('counts diagnostics remaining after page two in the next-page hint', async ()
   assert.equal((third.readings as Row[]).length, 1);
   assert.equal(third.help, undefined);
 });
+
+it('caps places at 500 before requests, including name searches', async () => {
+  for (const text of [[], ['Site']]) {
+    for (const limit of ['501', '2000', '0']) {
+      const start = fake.state.requests.length;
+      const result = await runBinary(
+        ['places', ...text, '--limit', limit],
+        env,
+      );
+      assert.equal(result.code, 2, result.stdout);
+      const out = decode(result.stdout) as Row;
+      assert.equal(out.code, 'usage');
+      assert.match(String(out.message), /1 to 500/);
+      assert.equal(fake.state.requests.length, start);
+    }
+  }
+});
+
+it('pages places at the 500-row boundary with correct totals and hints', async () => {
+  for (const [page, count, first] of [
+    [1, 500, 10000],
+    [2, 500, 10500],
+    [3, 265, 11000],
+  ] as const) {
+    const start = fake.state.requests.length;
+    const out = await ok(
+      'places',
+      '--limit',
+      '500',
+      '--page',
+      String(page),
+      '--full',
+    );
+    const rows = out.places as Row[];
+    assert.equal(rows.length, count);
+    assert.equal(rows[0]?.id, first);
+    assert.match(
+      String(out.summary),
+      new RegExp(`^${count} of 1265 saved places`),
+    );
+    const requests = fake.state.requests
+      .slice(start)
+      .filter((r) => r.path === '/api/v2/places');
+    assert.equal(requests.length, 1);
+    const query = new URLSearchParams(requests[0]?.query);
+    assert.equal(query.get('page_size'), '500');
+    assert.equal(query.get('page_number'), String(page));
+    if (page < 3) {
+      assert.match(
+        JSON.stringify(out.help),
+        new RegExp(
+          `--page ${page + 1} --limit 500.*next ${page === 1 ? 500 : 265}`,
+        ),
+      );
+    } else {
+      assert.doesNotMatch(JSON.stringify(out.help), /--page 4/);
+    }
+  }
+});

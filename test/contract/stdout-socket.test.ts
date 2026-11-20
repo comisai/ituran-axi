@@ -80,13 +80,13 @@ describe('stdout shared through a socket', () => {
 
   it('delivers large output completely before exiting', async () => {
     const fake = await startFake({
-      placeCount: 2000,
-      placeDescription: 'd'.repeat(70),
+      placeCount: 500,
+      placeDescription: 'd'.repeat(350),
     });
     try {
       const r = await runPiped(
         process.execPath,
-        [BIN, 'places', '--limit', '2000', '--full'],
+        [BIN, 'places', '--limit', '500', '--full'],
         fakeEnv(fake.url),
         300,
       );
@@ -96,8 +96,8 @@ describe('stdout shared through a socket', () => {
         `only ${Buffer.byteLength(r.stdout)} bytes`,
       );
       const tail = r.stdout.slice(-300);
-      assert.ok(r.stdout.startsWith('summary: 2000 saved places\n'), tail);
-      assert.ok(r.stdout.includes('\n  11999,Site 1999,Area,ddd'), tail);
+      assert.ok(r.stdout.startsWith('summary: 500 saved places\n'), tail);
+      assert.ok(r.stdout.includes('\n  10499,Site 499,Area,ddd'), tail);
       assert.ok(r.stdout.endsWith('\n'), tail);
     } finally {
       await fake.close();

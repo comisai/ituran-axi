@@ -848,6 +848,9 @@ export async function startFake(options: FakeOptions = {}) {
               }))
             : PLACES,
           'places',
+          'metadata',
+          q,
+          500,
         );
       r =
         req.method === 'GET'
